@@ -19,5 +19,11 @@ namespace CookingLib
 
         /// <summary>Game effects every stew gets, replacing the game's Feed 3. An empty list gives none.</summary>
         public List<EffectSpec> GlobalEffects;
+
+        /// <summary>The stew a pot locks on when its ingredients match no recipe: a Raw stew prefab from the dump, not the default stew. The game uses Non Recipe Raw Stew.</summary>
+        public string NoRecipeStew;
+
+        /// <summary>How hard a locked pot pushes an ingredient out, 0 to 1000. The game uses 300. At 0 no push is applied.</summary>
+        public float? RejectionForce;
     }
 }

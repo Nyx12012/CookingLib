@@ -20,6 +20,11 @@ namespace CookingLib
         internal static readonly FieldInfo CookableCategory = typeof(CookableItem).GetField("category", PrivateInstance);
         internal static readonly FieldInfo FoodEffects = typeof(EdibleObject).GetField("consumptionEffects", PrivateInstance);
         internal static readonly FieldInfo LiquidEffects = typeof(LiquidData).GetField("effects", PrivateInstance);
+        internal static readonly FieldInfo GarnishMultipliers = typeof(CookingGarnish).GetField("effectMultipliers", PrivateInstance);
+        internal static readonly FieldInfo StewTint = typeof(StewComponent).GetField("tintColor", PrivateInstance);
+        internal static readonly FieldInfo StewIngredients = typeof(StewComponent).GetField("baseEffectsMultiplier", PrivateInstance);
+        internal static readonly FieldInfo StewBaseLiquid = typeof(StewComponent).GetField("baseLiquidEffectsMultiplier", PrivateInstance);
+        internal static readonly FieldInfo StewExtras = typeof(StewComponent).GetField("extraEffectsMultiplier", PrivateInstance);
 
         const uint FullnessHash = 34710;
 
@@ -35,6 +40,16 @@ namespace CookingLib
         internal static IEnumerable<Edit> Of(object target) => edits.Where(e => ReferenceEquals(e.Target, target));
 
         internal static Edit Find(string key) => edits.FirstOrDefault(e => e.Key == key);
+
+        internal static object Original(object target, FieldInfo field, object live)
+        {
+            foreach (Edit edit in Of(target))
+            {
+                if (edit.TryOriginal(field, out object saved))
+                    return saved;
+            }
+            return live;
+        }
 
         internal static Edit Write(Claims.Claim claim, object target, string was, FieldInfo field = null, object value = null, Action reset = null)
         {
@@ -85,6 +100,29 @@ namespace CookingLib
             }
             return effects.ToArray();
         }
+
+        internal static EffectDefinitionApplication[] Multipliers(List<EffectSpec> specs, string field)
+        {
+            if (specs == null)
+                return null;
+            if (specs.Contains(null))
+                throw new ArgumentException(field + " can't hold a null effect");
+            EffectSpread.Refuse(specs, field);
+
+            List<EffectDefinitionApplication> effects = new List<EffectDefinitionApplication>();
+            foreach (EffectSpec spec in specs)
+            {
+                if (!IsMultiplier(spec.Strength))
+                    throw new ArgumentException(field + " must be 0 to 10");
+                EffectDefinition definition = EffectNames.Need(spec.Effect, EffectKinds.Game);
+                if (effects.Any(e => e.EffectToModify == definition))
+                    throw new ArgumentException(field + " lists " + definition.name + " twice");
+                effects.Add(new EffectDefinitionApplication(definition, spec.Strength));
+            }
+            return effects.ToArray();
+        }
+
+        internal static bool IsMultiplier(float value) => !float.IsNaN(value) && value >= 0f && value <= 10f;
 
         internal static EffectDefinitionApplication[] Replace(List<EffectSpec> specs, EffectDefinitionApplication[] game, string what)
         {
@@ -186,6 +224,19 @@ namespace CookingLib
                 if (!saved.Any(s => s.Key == field))
                     saved.Add(new KeyValuePair<FieldInfo, object>(field, field.GetValue(Target)));
                 field.SetValue(Target, value);
+            }
+
+            internal bool TryOriginal(FieldInfo field, out object value)
+            {
+                foreach (KeyValuePair<FieldInfo, object> pair in saved)
+                {
+                    if (pair.Key != field)
+                        continue;
+                    value = pair.Value;
+                    return true;
+                }
+                value = null;
+                return false;
             }
 
             internal void Undo()

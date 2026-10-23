@@ -1,4 +1,5 @@
 using Alta.Alchemy;
+using Alta.Networking;
 
 namespace CookingLib
 {
@@ -16,12 +17,14 @@ namespace CookingLib
         /// <summary>The id from the spec.</summary>
         public string Id => Spec?.Id;
 
-        /// <summary>Why it was refused, or null.</summary>
+        /// <summary>Why it was refused, or null. It can be set once the world is up, if NoRecipeStew resolves to nothing.</summary>
         public string Error { get; internal set; }
 
         /// <summary>True on the server once the rules are in the game's pot settings.</summary>
         public bool IsApplied { get; internal set; }
 
         internal EffectDefinitionApplication[] GlobalEffects { get; set; }
+
+        internal NetworkPrefab NoRecipeStew { get; set; }
     }
 }

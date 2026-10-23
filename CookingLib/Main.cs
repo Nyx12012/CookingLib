@@ -10,7 +10,7 @@ namespace CookingLib
 {
     public class Main : MelonMod
     {
-        public const string Version = "0.2.0";
+        public const string Version = "0.2.1";
 
         public static event Action PreSetup;
         public static event Action Setup;
@@ -61,6 +61,8 @@ namespace CookingLib
             StewRecipes.ResolveAll();
             VanillaRecipes.ApplyAll();
             VanillaIngredients.ApplyAll();
+            VanillaGarnishes.ApplyAll();
+            VanillaStews.ApplyAll();
             Safe.Run("food sweep", Edibles.WorldUp);
             Infusions.ResolveAll();
             Safe.Run("roasting", Roasting.ResolveAll);

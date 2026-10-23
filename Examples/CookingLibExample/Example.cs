@@ -9,7 +9,7 @@ using CookingLib;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(CookingLibExample.Example), "CookingLibExample", "0.2.0", "Shadow")]
+[assembly: MelonInfo(typeof(CookingLibExample.Example), "CookingLibExample", "0.2.1", "Shadow")]
 [assembly: MelonGame("Alta", "A Township Tale")]
 
 namespace CookingLibExample
@@ -172,6 +172,20 @@ namespace CookingLibExample
                 Id = "example.cookedcarrot",
                 Item = "Carrot Full Cooked",
                 Category = "Berries"
+            });
+
+            VanillaGarnishes.Modify(new GarnishSpec
+            {
+                Id = "example.salt",
+                Item = "Salt",
+                Multipliers = new List<EffectSpec> { new EffectSpec { Effect = "Protection", Strength = 2f } }
+            });
+
+            VanillaGarnishes.Modify(new GarnishSpec
+            {
+                Id = "example.garlic",
+                Item = "Garlic Full Cooked",
+                Effects = new List<EffectSpec> { new EffectSpec { Effect = "Nourish", Strength = 0.5f } }
             });
 
             Edibles.Register(new EdibleSpec

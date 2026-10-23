@@ -45,6 +45,7 @@ namespace CookingLib
                 Safe.Fail(nameof(PotReloadPatch), e);
                 Safe.Run(nameof(PotReloadPatch) + " base", () => KeepBase(__instance));
             }
+            Safe.Run(nameof(PotReloadPatch) + " stews", () => VanillaStews.CopyOnto(__instance));
         }
 
         static void KeepBase(CookingPot pot)

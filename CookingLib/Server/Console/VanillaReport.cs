@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text;
 using Alta;
@@ -27,6 +26,22 @@ namespace CookingLib
             {
                 string target = entry.Item != null ? entry.Item.name : entry.Spec?.Item;
                 text.Append("  ").Append(entry.Id).Append("  ").Append(target).Append(": ").Append(IngredientState(entry)).Append('\n');
+            }
+
+            text.Append("vanilla garnishes: ").Append(VanillaGarnishes.All.Count).Append('\n');
+            foreach (LibGarnish entry in VanillaGarnishes.All)
+            {
+                string target = entry.Item != null ? entry.Item.name : entry.Spec?.Item;
+                text.Append("  ").Append(entry.Id).Append("  ").Append(target).Append(": ").Append(GarnishState(entry))
+                    .Append(CookingLibCommands.AliasNotes(GarnishEffects(entry.Spec))).Append('\n');
+            }
+
+            text.Append("vanilla stews: ").Append(VanillaStews.All.Count)
+                .Append(Main.IsServer ? ", swept " + VanillaStews.Swept + " in pots, " + VanillaStews.Reloaded + " in reloading pots (" + VanillaStews.Copied + " changed)" : "").Append('\n');
+            foreach (LibStew entry in VanillaStews.All)
+            {
+                string target = entry.Prefab != null ? entry.Prefab.name : entry.Spec?.Stew;
+                text.Append("  ").Append(entry.Id).Append("  ").Append(target).Append(": ").Append(StewState(entry)).Append(Notes(entry.Warnings)).Append('\n');
             }
 
             List<LibEdible> foods = Edibles.All.ToList();
@@ -62,7 +77,7 @@ namespace CookingLib
                     .Append("  base ").Append(VanillaRecipes.BaseText(VanillaEdits.PossibleLiquids.GetValue(recipe) as List<LiquidDefinition>));
                 VanillaRecipes.Override edit = VanillaRecipes.OverrideOf(recipe);
                 if (edit != null && edit.Tint.HasValue)
-                    text.Append("  tint ").Append(Rgba(edit.Tint.Value));
+                    text.Append("  tint ").Append(VanillaStews.Rgba(edit.Tint.Value));
                 if (edit != null && edit.IgnoresDyes)
                     text.Append("  ignores dyes");
                 if (edit != null && edit.Result != null)
@@ -83,6 +98,17 @@ namespace CookingLib
                     .Append("  category ").Append(cookable.Category == null ? "none" : cookable.Category.name)
                     .Append("  chunk ").Append(cookable.ChunkVisual == null ? "none" : cookable.ChunkVisual.name)
                     .Append("  effects ").Append(VanillaEdits.Text(cookable.Effects)).Append(ChangedBy(cookable)).Append('\n');
+            }
+            text.Append('\n');
+
+            text.Append("== Vanilla garnishes now (adds, times, chunk; changed by names the CookingLib edit) ==\n");
+            foreach (Item item in VanillaGarnishes.Items())
+            {
+                CookingGarnish garnish = VanillaGarnishes.Garnish(item);
+                text.Append(item.name).Append("  ").Append(item.Hash)
+                    .Append("  adds ").Append(VanillaEdits.Text(garnish.Effects))
+                    .Append("  times ").Append(VanillaEdits.Text(garnish.EffectMultipliers))
+                    .Append("  chunk ").Append(garnish.ChunkVisual == null ? "none" : garnish.ChunkVisual.name).Append(ChangedBy(garnish)).Append('\n');
             }
             text.Append('\n');
 
@@ -128,16 +154,72 @@ namespace CookingLib
             return state;
         }
 
+        static string GarnishState(LibGarnish entry)
+        {
+            if (entry.Error != null)
+                return "refused: " + entry.Error;
+
+            List<string> parts = new List<string>();
+            if (entry.HasPages)
+                parts.Add("Effects " + VanillaEdits.Text(entry.Effects) + WasBy(entry.Garnish, "effects", entry.Id) + (entry.PagesApplied ? " applied at setup" : " not applied"));
+            if (entry.HasWorld)
+            {
+                List<string> world = new List<string>();
+                if (entry.Spec.Multipliers != null)
+                    world.Add("Multipliers " + VanillaEdits.Text(entry.Multipliers) + WasBy(entry.Garnish, "multipliers", entry.Id));
+                if (entry.Spec.Chunk != null)
+                    world.Add("Chunk " + (entry.Chunk == null ? "none" : entry.Chunk.name) + WasBy(entry.Garnish, "chunk", entry.Id));
+                parts.Add(string.Join(", ", world.ToArray()) + (entry.WorldApplied ? " applied" : Main.IsServer ? " waiting for the world" : " server only"));
+            }
+            return string.Join("; ", parts.ToArray());
+        }
+
+        static string StewState(LibStew entry)
+        {
+            if (entry.Error != null)
+                return "refused: " + entry.Error;
+            if (!Main.IsServer)
+                return "recorded, stew changes apply on the server only";
+            if (!entry.IsApplied || entry.Entry == null)
+                return "waiting for the world";
+
+            StewSpec spec = entry.Spec;
+            StewComponent stew = entry.Entry.Stew;
+            List<string> parts = new List<string>();
+            if (spec.Ingredients.HasValue)
+                parts.Add("Ingredients x" + Claims.Number(spec.Ingredients.Value) + WasBy(stew, "ingredients", entry.Id));
+            if (spec.BaseLiquid.HasValue)
+                parts.Add("BaseLiquid x" + Claims.Number(spec.BaseLiquid.Value) + WasBy(stew, "liquid", entry.Id));
+            if (spec.Extras.HasValue)
+                parts.Add("Extras x" + Claims.Number(spec.Extras.Value) + WasBy(stew, "extras", entry.Id));
+            if (spec.Tint.HasValue)
+                parts.Add("Tint " + VanillaStews.Rgba(spec.Tint.Value) + WasBy(stew, "tint", entry.Id));
+            return string.Join(", ", parts.ToArray()) + " applied";
+        }
+
+        static string WasBy(object target, string field, string id)
+        {
+            VanillaEdits.Edit edit = target == null ? null : VanillaEdits.Of(target).FirstOrDefault(e => e.Field == field);
+            if (edit == null)
+                return "";
+            string by = edit.By;
+            return " (was " + edit.Was + (by == null || string.Equals(by, id, StringComparison.OrdinalIgnoreCase) ? "" : ", set by " + by) + ")";
+        }
+
+        static IEnumerable<EffectSpec> GarnishEffects(GarnishSpec spec)
+        {
+            if (spec == null)
+                return null;
+            return (spec.Effects ?? new List<EffectSpec>()).Concat(spec.Multipliers ?? new List<EffectSpec>());
+        }
+
         static string Notes(IReadOnlyList<string> warnings) => warnings == null || warnings.Count == 0 ? "" : "; " + string.Join("; ", warnings.ToArray());
 
-        static string ChangedBy(object target)
+        internal static string ChangedBy(object target)
         {
             List<string> owners = VanillaEdits.Of(target).GroupBy(e => e.By ?? "?")
                 .Select(g => g.Key + " (" + string.Join(", ", g.Select(e => e.Field).ToArray()) + ")").ToList();
             return owners.Count == 0 ? "" : "  changed by " + string.Join(", ", owners.ToArray());
         }
-
-        static string Rgba(UnityEngine.Color c) =>
-            string.Join(" ", new[] { c.r, c.g, c.b, c.a }.Select(v => v.ToString("0.###", CultureInfo.InvariantCulture)).ToArray());
     }
 }

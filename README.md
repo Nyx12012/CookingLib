@@ -1,6 +1,6 @@
 # CookingLib
 
-A library for A Township Tale mods. Other mods use it to add liquids, stew recipes and infusions (an item dropped into a liquid turns it into another liquid), to change the game's own recipes, ingredients, foods, liquids, cooking pots and what items turn into over a fire, and to hear when players cook, drink and eat. On its own it adds no content, but it keeps stews in pots across restarts.
+A library for A Township Tale mods. Other mods use it to add liquids, stew recipes and infusions (an item dropped into a liquid turns it into another liquid), to change the game's own recipes, ingredients, garnishes, stews, foods, liquids, cooking pots and what items turn into over a fire, and to hear when players cook, drink and eat. On its own it adds no content, but it keeps stews in pots across restarts.
 
 ## Install
 
@@ -8,10 +8,10 @@ Needs MelonLoader. Put `CookingLib.dll` in the `Mods` folder of the server. Play
 
 | A mod adds | Server needs | Players need |
 |---|---|---|
-| Server only liquids, stew recipes, infusions, pot rules, roasting rules | CookingLib and the mod | nothing, vanilla players can join |
+| Server only liquids, stew recipes, infusions, pot rules, roasting rules, stew stage changes | CookingLib and the mod | nothing, vanilla players can join |
 | Shared liquids | CookingLib and the mod | CookingLib and the mod |
 | Shared recipes | CookingLib and the mod | nothing while `SharedRecipePages` is off; with it on, CookingLib and the mod |
-| Changes to game recipes, ingredients, foods and liquids | CookingLib and the mod | nothing; with both they also see the new journal pages |
+| Changes to game recipes, ingredients, garnishes, foods and liquids | CookingLib and the mod | nothing; with both they also see the new journal pages |
 
 ## For modders
 
@@ -106,8 +106,12 @@ Endless sources such as the Concoction Crate, and rivers and lakes, are skipped:
 | `Garnishes` | 3 | 0 to 16 | how many garnishes a stew takes; one more floats instead of dissolving |
 | `StewingTemperature` | 80 | above 23, below 100 | how hot the water and each ingredient must be to stew |
 | `GlobalEffects` | Feed 3 | game effects, no `OverSeconds` | the effects every stew gets; an empty list gives none |
+| `NoRecipeStew` | Non Recipe Raw Stew | a Raw stew prefab from the dump, not the default stew | the stew a pot locks on when its ingredients match no recipe |
+| `RejectionForce` | 300 | 0 to 1000 | how hard a locked pot pushes a dropped ingredient out; at 0 no push is applied |
 
 - Rules apply once the world is up, or at once after that. `PotRules.Remove(id)` gives the game's values back. Nothing is saved: the server applies them again after a restart, and removing the mod gives back vanilla pots.
+- `NoRecipeStew` sets the look, name, colour, multipliers and cooking times of a stew with no recipe; its effects stay the plain sum of its ingredients. Pick a recipe's stew, such as `Pumpkin Recipe Raw Stew`, and a pot with the wrong ingredients looks like that stew and gives none of its buffs, on vanilla clients too; `status` warns. The default stew is refused, since a pot locked on it would take ingredients again after a reload. The name resolves once the world is up, so a wrong one refuses the rules then.
+- `RejectionForce` is strength only: the push always goes up and the same way. At 0 no push is applied, so the ingredient should rest in the locked pot; untested.
 - Every game recipe has 4 slots and a pot only matches recipes with exactly its count, so any other `Ingredients` stops every game recipe. Random recipe pages then skip recipes no pot can make, and `status` lists them. A recipe page has room for 4 ingredients.
 - Water sits at the air temperature, about 23, so a pot set lower stews with no fire. Vanilla players hear the boiling sound start at 80 whatever the rule.
 - Feed decides who can drink a stew: a player it would overfill is refused. `status` prints the most Feed a full pot's stew can carry and warns when that passes the game's own.
@@ -158,6 +162,58 @@ VanillaRecipes.Modify(new VanillaRecipeSpec
 - Feed may change here: stews reach players by value, so everyone gets the real numbers.
 - `Revert(id)` gives back the game's values. A page reverted while the server runs can show twice in a book until the book reloads.
 - Nothing is saved: without the mod the game's values come back at the next start. A stew already cooked keeps its values.
+
+### Game garnishes
+
+`VanillaGarnishes.Modify(spec)` changes one of the game's garnishes: Salt or a Garlic stage. A field left null keeps the game's value.
+
+```csharp
+VanillaGarnishes.Modify(new GarnishSpec
+{
+    Id = "you.salt",
+    Item = "Salt",
+    Multipliers = new List<EffectSpec> { new EffectSpec { Effect = "Protection", Strength = 2f } }
+});
+```
+
+| Field | What it changes |
+|---|---|
+| `Effects` | what the garnish adds to a stew, and its ingredient page |
+| `Multipliers` | what it multiplies, each 0 to 10: an effect already in the stew is scaled, one the stew lacks stays absent, and 0 removes it |
+| `Chunk` | the chunk it leaves in a stew, `""` for none |
+
+- Call it from `Main.Setup` on the server and on players' machines. `Effects` changes the garnish's journal page, so set it from Setup only; players with CookingLib and your mod see the new page, vanilla players the game's, and the stew gives the new effects to everyone. `Multipliers` and `Chunk` are server only and apply once the world is up. No page shows multipliers.
+- Each garnish in a stew multiplies again, so two Salts at Protection x2 give x4. A recipe's own modifiers apply after.
+- A garnish page only drops as loot; drinking a stew never unlocks it.
+- Feed may change here: stews reach players by value.
+- `Revert(id)` gives back the game's values. Nothing is saved.
+
+### Stew stages
+
+`VanillaStews.Modify(spec)` changes one stew prefab, one stage of one stew: how much its ingredients, its base liquid and its recipe count, and its colour. Server only, so vanilla players need nothing. Every stage is its own prefab; `cookinglib dump` lists the 54 under Stews, such as `Pumpkin Recipe Cooked Stew`.
+
+```csharp
+VanillaStews.Modify(new StewSpec
+{
+    Id = "you.pumpkin",
+    Stew = "Pumpkin Recipe Cooked Stew",
+    Ingredients = 1.5f,
+    Tint = new Color(0.9f, 0.6f, 0.1f)
+});
+```
+
+| Field | Game | Allowed | What it changes |
+|---|---|---|---|
+| `Ingredients` | 1 | 0 to 10 | multiplies what the ingredients add |
+| `BaseLiquid` | 1 | 0 to 10 | multiplies what the base liquid adds |
+| `Extras` | by stage | 0 to 10 | multiplies the recipe's extra effects, and its modifiers too |
+| `Tint` | the stew's own | channels 0 to 1 | the stew's colour, under a recipe `Tint` and a liquid that colours stews |
+
+- Call it from `Main.Setup` or later. It applies once the world is up, or at once after that, to stews already in pots and to pots reloading after a restart. A pot mid-stew gets the new numbers at its next ingredient, garnish or stage change; a stew already locked and cooked keeps its liquid until then.
+- `Extras` on a recipe's stage also scales that recipe's modifiers, since the game uses the one number for both; `status` names the recipes. On the default and non recipe stews it changes nothing.
+- A `Tint` on a stew look also colours every CookingLib recipe that borrows that look and sets no `Tint` of its own; `status` names them.
+- The game's stew experience flag on each stage is read only: `dump` shows it and `StewEvents` carry it.
+- `Revert(id)` gives back the game's values, on stews in pots too. Nothing is saved.
 
 ### Game foods and liquids
 
@@ -229,8 +285,12 @@ Each event is a copy taken when it happened. Handlers run on the main thread fro
 - `Ingredients` are in the order they went in, `Garnishes` apart. `AddedBy` matches the last `AddedBy.Count` ingredients: the player who last held each item, or an empty entry (`Player` null, `UserId` 0) when nobody held it or that player left before the check. `Cooks` lists each player once.
 - `CarriedOver` counts the first ingredients that came from a save, which have no `AddedBy` entry.
 - `PotId` and `Position` are for this session's logs; pot ids change across restarts.
-- The game has a stew experience system it never wired (`ProgressionSettings.GainStewingExperience`). `Cooks` and `IsAwardingExperienceStage` are its inputs; pass it a new list of at most 4 players, since it removes nulls from the list it gets.
+- `Cooks` and `IsAwardingExperienceStage` are the inputs of the game's unwired stew experience, see Cooking XP.
 - `StewEvents.Error` says why the events are off. On players' machines it always says so.
+
+### Cooking XP
+
+The game never awards cooking experience: `ProgressionSettings.GainStewingExperience` has no caller, and the Cooking skill tree ships disabled with no skills, so even a wired call would give nothing. CookingLib adds no XP knob. The server's own `CookingXPX` in `ServerConfiguration.json` already multiplies cooking XP, should a skills mod ever wire it: `StewEvents` carry the inputs it takes (`Cooks` and `IsAwardingExperienceStage`; pass it a new list of at most 4 players, since it removes nulls from the list it gets), and `cookinglib dump` shows which stages carry the flag.
 
 ### Drink and eat events
 
@@ -278,7 +338,7 @@ Drinks.Drank += args =>
 
 ### Names
 
-Specs use the game's own names. Run `cookinglib dump` in the server console to write every name to `UserData\CookingLib-dump.txt` and copy them from there. It also lists CookingLib's own liquids, each effect's settings with the strengths the game uses for it, the stews with their stages, the names `Liquids.Identify` gives, the pot definitions and the drink gate, the endless sources infusions skip, every item that roasts, the glyphs, and the game's recipes, ingredients, and changed foods and liquids as they are now with the mod that changed each. `cookinglib status` lists what registered, why anything was refused, the pot rules, roasting rules and shared recipe pages, the changes to game recipes, ingredients, foods and liquids, the pots resumed after a restart, and whether the stew events, drink events and dyes are on.
+Specs use the game's own names. Run `cookinglib dump` in the server console to write every name to `UserData\CookingLib-dump.txt` and copy them from there. It also lists CookingLib's own liquids, each effect's settings with the strengths the game uses for it, the stews with their stages, multipliers and experience flags, the names `Liquids.Identify` gives, the pot definitions, the no recipe stew, the locked pot push and the drink gate, the endless sources infusions skip, every item that roasts, the glyphs, and the game's recipes, ingredients, garnishes, and changed foods and liquids as they are now with the mod that changed each. `cookinglib status` lists what registered, why anything was refused, the pot rules, roasting rules and shared recipe pages, the changes to game recipes, ingredients, garnishes, stews, foods and liquids with the game's value each replaced, the pots resumed after a restart, and whether the stew events, drink events and dyes are on.
 
 A name that matches nothing is refused with up to 3 close names ("did you mean"), or with every name when there are 20 or fewer.
 
@@ -302,7 +362,7 @@ A number is tried first, then the game's exact name, then an alias. An alias kee
 
 ### Food values
 
-`cookinglib foods` writes the game's live values to `UserData\CookingLib-foods.tsv`: liquids, eaten foods, stew ingredients, garnishes, recipes per stage, and stew stages. It replies with counts and how long the prefab walk took. `cookinglib foods liquids` (or `eaten`, `ingredients`, `garnishes`, `recipes`, `stages`, `all`) also prints that part. Where a CookingLib change touched a row, `was` holds the game's value and `by` the mod, and the printed part shows a changed effect as `0.3 (was 0.1)`. Changes by mods that don't use CookingLib don't show.
+`cookinglib foods` writes the game's live values to `UserData\CookingLib-foods.tsv`: liquids, eaten foods, stew ingredients, garnishes, recipes per stage, and stew stages. It replies with counts and how long the prefab walk took. `cookinglib foods liquids` (or `eaten`, `ingredients`, `garnishes`, `recipes`, `stages`, `all`) also prints that part. Where a CookingLib change touched a row, `was` holds the game's value and `by` the mod, and the printed part shows a changed effect as `0.3 (was 0.1)`. Garnish rows (`adds` and `times`) and stew stage rows fill them too. Changes by mods that don't use CookingLib don't show.
 
 `cookinglib foods mix <stage> <item>, <item>, ... [+ <garnish>, ...]` runs the game's own stew math on Water, for example `cookinglib foods mix Cooked Carrot Full Ripe, Eggplant Full Ripe, Potato Full Ripe, Tomato Full Ripe + Salt`. The stage is `Raw`, `Cooked` or `Burnt`. It can't show a recipe's `ResultLiquid` or colour.
 
@@ -330,6 +390,15 @@ A number is tried first, then the game's exact name, then an alias. An alias kee
 ## Building
 
 Run `dotnet build`. The game path defaults to `C:\Games\Alta\A Township Tale`, pass `-p:GamePath="your path"` to use another one. `python tools/check_style.py` checks the code style, and `dotnet run --project tests/CookingLib.Tests` runs the offline tests (the game must be installed, not running). The tests are not part of the release.
+
+## Changes in 0.2.1
+
+- New `VanillaGarnishes.Modify` changes what Salt and Garlic add to a stew, what they multiply and the chunk they leave, with `Revert`.
+- New `VanillaStews.Modify` changes a stew stage's ingredient, base liquid and extras multipliers and its colour, on stews already in pots and reloading pots too, with `Revert`.
+- `PotRules` gains `NoRecipeStew`, the stew a pot locks on with no recipe, and `RejectionForce`, the push on an ingredient dropped into a locked pot.
+- `status` shows each garnish and stew change with the game's value it replaced, and warns about a no recipe stew that borrows a recipe's look and an `Extras` change that also scales a recipe's modifiers. Its worst-case Feed line compares against the game's own values even after ingredient changes.
+- `dump` lists the nine garnishes, the stews' experience flags and the two new pot settings, and `foods` fills `was` and `by` on garnish and stew stage rows.
+- The README says why there is no cooking XP knob.
 
 ## Changes in 0.2
 
@@ -363,7 +432,9 @@ Run `dotnet build`. The game path defaults to `C:\Games\Alta\A Township Tale`, p
 - A vanilla player who comes across a shared recipe page sees a blank sheet and gets errors in their log.
 - `cookinglib unlock` can reply `unlock failed` while the world's pages are not loaded yet. Try again a little later.
 - The replies of `cookinglib foods` and `cookinglib pots` can be long for some console tools. The TSV and dump files hold everything.
-- Books show an old food or recipe page until they reload, and a page reverted while the server runs can show twice.
+- Books show an old food, ingredient, garnish or recipe page until they reload, and a page reverted while the server runs can show twice.
+- A stew locked and cooked before a stew stage change keeps its liquid until its next ingredient, garnish or stage change.
+- What an ingredient dropped into a locked pot does at `RejectionForce` 0, and whether a vanilla client sees a changed push, are untested.
 
 ## Please test and report
 
@@ -378,6 +449,7 @@ Run `dotnet build`. The game path defaults to `C:\Games\Alta\A Township Tale`, p
 **Dyes**
 
 - Drop Coal into a pot of water with no ingredients, then cook a stew in it to Burnt: black at every stage, while a plain Water stew looks normal.
+- With DyeingAPI v7 on the server, dip an item it can dye into a black stew: tell us which colour it takes.
 
 **Drinking and eating**
 
@@ -415,6 +487,15 @@ Run `dotnet build`. The game path defaults to `C:\Games\Alta\A Township Tale`, p
 **Food values**
 
 - `cookinglib foods all` on a fresh boot: send the reply, how long it took, and whether the whole reply reached your console tool.
+
+**Garnishes and stew stages**
+
+- `cookinglib foods stages` and `cookinglib dump` on any server: send the stages part and the Stews section, with the multipliers, tints and xp flags of all 54 stews.
+- Cook 4 cooked eggplant halves with 1 Salt, then run `cookinglib foods mix Cooked` with the same four and `+ Salt`: Protection is doubled by the example's Salt change, and the `drank:` line agrees.
+- Spawn Garlic Full Cooked's ingredient page: a modded client reads Nourish 0.5, a vanilla client the game's 0.1, and a stew with that garnish gives 0.5 to both.
+- Lock a pot on the non recipe stew with 4 unmatched ingredients, `cookingprobes on stew`, then drop Salt in: the stew turns green and `cookinglib pots` shows its effects at x1.5. `save now` and restart: still green, and `status` counts the pot's stews under reloading pots.
+- `cookingprobes on norecipe`, then 4 unmatched ingredients: the pot locks on a pumpkin looking stew with no pumpkin buffs, on a vanilla client too. Restart: the pot resumes locked with no recipe.
+- `cookingprobes on push0`, drop a carrot into a locked pot: it rests in the pot. `cookingprobes off push0`, `cookingprobes on push1000`, drop another: it flies. Tell us what a vanilla client sees both times.
 
 ## Reporting problems
 

@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Alta.Alchemy;
+using Alta.Networking;
 
 namespace CookingLib
 {
-    /// <summary>Changes every cooking pot: ingredient count, garnish slots, stewing temperature and the effects every stew gets. Server only.</summary>
+    /// <summary>Changes every cooking pot: ingredient count, garnish slots, stewing temperature, the effects every stew gets, the stew a pot locks on with no recipe, and the push on an ingredient dropped into a locked pot. Server only.</summary>
     public static class PotRules
     {
         static readonly List<LibPotRules> all = new List<LibPotRules>();
@@ -102,6 +103,10 @@ namespace CookingLib
                 parts.Add("StewingTemperature " + Claims.Number(spec.StewingTemperature.Value));
             if (rules.GlobalEffects != null)
                 parts.Add("GlobalEffects " + Claims.Effects(rules.GlobalEffects));
+            if (spec.NoRecipeStew != null)
+                parts.Add("NoRecipeStew " + (rules.NoRecipeStew != null ? rules.NoRecipeStew.name : spec.NoRecipeStew.Trim()));
+            if (spec.RejectionForce.HasValue)
+                parts.Add("RejectionForce " + Claims.Number(spec.RejectionForce.Value));
             return string.Join(", ", parts.ToArray());
         }
 
@@ -118,18 +123,46 @@ namespace CookingLib
 
             try
             {
+                foreach (LibPotRules rules in Live.Where(r => r.Spec.NoRecipeStew != null && r.NoRecipeStew == null).ToList())
+                    Resolve(rules);
+
                 List<LibPotRules> live = Live.ToList();
                 int? ingredients = live.Select(r => r.Spec.Ingredients).FirstOrDefault(v => v.HasValue);
                 int? garnishes = live.Select(r => r.Spec.Garnishes).FirstOrDefault(v => v.HasValue);
                 float? temperature = live.Select(r => r.Spec.StewingTemperature).FirstOrDefault(v => v.HasValue);
                 EffectDefinitionApplication[] global = live.Select(r => r.GlobalEffects).FirstOrDefault(v => v != null);
-                bool applied = PotKnobs.Write(ingredients, garnishes, temperature, global);
+                NetworkPrefab noRecipe = live.Select(r => r.NoRecipeStew).FirstOrDefault(v => v != null);
+                float? push = live.Select(r => r.Spec.RejectionForce).FirstOrDefault(v => v.HasValue);
+                bool applied = PotKnobs.Write(ingredients, garnishes, temperature, global, noRecipe, push);
                 foreach (LibPotRules rules in live)
                     rules.IsApplied = applied;
             }
             catch (Exception e)
             {
                 Safe.Fail("pot rules apply", e);
+            }
+        }
+
+        static void Resolve(LibPotRules rules)
+        {
+            try
+            {
+                StewStages.Entry stew = VanillaStews.NeedStew(rules.Spec.NoRecipeStew);
+                if (stew.Stage != StewStage.Raw)
+                    throw new ArgumentException(stew.Name + " is a " + stew.Stage + " stew, NoRecipeStew must be a Raw one");
+                if (stew.Hash == StewStages.DefaultRaw)
+                    throw new ArgumentException(stew.Name + " is the default stew, so a pot locked on it would take ingredients again after a reload; NoRecipeStew must be another Raw stew");
+                string clash = Claims.Take(rules.Id, new[] { Claims.Pot("NoRecipeStew", stew.Name) });
+                if (clash != null)
+                    throw new ArgumentException(clash);
+                rules.NoRecipeStew = stew.Prefab;
+            }
+            catch (Exception e)
+            {
+                rules.Error = e is ArgumentException ? e.Message : e.ToString();
+                rules.IsApplied = false;
+                Claims.Release(rules.Id);
+                Log.Warn("pot rules " + rules.Id + " refused: " + rules.Error);
             }
         }
 
@@ -144,6 +177,8 @@ namespace CookingLib
                 yield return Claims.Pot("StewingTemperature", Claims.Number(spec.StewingTemperature.Value));
             if (rules.GlobalEffects != null)
                 yield return Claims.Pot("GlobalEffects", Claims.Effects(rules.GlobalEffects));
+            if (spec.RejectionForce.HasValue)
+                yield return Claims.Pot("RejectionForce", Claims.Number(spec.RejectionForce.Value));
         }
 
         static void Validate(LibPotRules rules)
@@ -157,14 +192,19 @@ namespace CookingLib
                 throw new ArgumentException("id is already set, Remove it first");
             if (Claims.Holds(spec.Id))
                 throw new ArgumentException("id is already used by another CookingLib change");
-            if (!spec.Ingredients.HasValue && !spec.Garnishes.HasValue && !spec.StewingTemperature.HasValue && spec.GlobalEffects == null)
-                throw new ArgumentException("set at least one of Ingredients, Garnishes, StewingTemperature, GlobalEffects");
+            if (!spec.Ingredients.HasValue && !spec.Garnishes.HasValue && !spec.StewingTemperature.HasValue && spec.GlobalEffects == null
+                && spec.NoRecipeStew == null && !spec.RejectionForce.HasValue)
+                throw new ArgumentException("set at least one of Ingredients, Garnishes, StewingTemperature, GlobalEffects, NoRecipeStew, RejectionForce");
             if (spec.Ingredients.HasValue && (spec.Ingredients.Value < 1 || spec.Ingredients.Value > 16))
                 throw new ArgumentException("Ingredients must be 1 to 16");
             if (spec.Garnishes.HasValue && (spec.Garnishes.Value < 0 || spec.Garnishes.Value > 16))
                 throw new ArgumentException("Garnishes must be 0 to 16");
             if (spec.StewingTemperature.HasValue && !(spec.StewingTemperature.Value > 23f && spec.StewingTemperature.Value < 100f))
                 throw new ArgumentException("StewingTemperature must be above 23 and below 100");
+            if (spec.NoRecipeStew != null && spec.NoRecipeStew.Trim().Length == 0)
+                throw new ArgumentException("NoRecipeStew is empty");
+            if (spec.RejectionForce.HasValue && !(spec.RejectionForce.Value >= 0f && spec.RejectionForce.Value <= 1000f))
+                throw new ArgumentException("RejectionForce must be 0 to 1000");
             if (spec.GlobalEffects == null)
                 return;
 

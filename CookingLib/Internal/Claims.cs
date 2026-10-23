@@ -27,6 +27,12 @@ namespace CookingLib
         internal static Claim Ingredient(Item item, string field, string value) =>
             new Claim("ingredient/" + item.Hash + "/" + field, "ingredient " + item.name + " " + field, value);
 
+        internal static Claim Garnish(uint itemHash, string name, string field, string value) =>
+            new Claim("garnish/" + itemHash + "/" + field, "garnish " + name + " " + field, value);
+
+        internal static Claim Stew(uint prefabHash, string name, string field, string value) =>
+            new Claim("stew/" + prefabHash + "/" + field, "stew " + name + " " + field, value);
+
         internal static Claim Recipe(StewRecipe recipe, string field, string value) =>
             new Claim("recipe/" + recipe.Hash + "/" + field, "recipe " + recipe.name + " " + field, value);
 

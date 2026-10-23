@@ -263,13 +263,14 @@ namespace CookingLib
 
         static void Stews(StringBuilder text)
         {
-            text.Append("== Stews (tint, look, then the base, liquid and extra effects multipliers) ==\n");
+            text.Append("== Stews (tint, look, then the ingredients, liquid and extras multipliers, xp for a stage flagged for the game's unused stew experience; changed by names the CookingLib edit) ==\n");
             foreach (NetworkPrefab prefab in PrefabWalk.With<StewComponent>().OrderBy(p => p.name, StringComparer.OrdinalIgnoreCase))
             {
                 StewComponent stew = prefab.GetComponent<StewComponent>();
                 text.Append(prefab.name).Append("  ").Append(prefab.Hash).Append("  ").Append(Rgba(stew.TintColor)).Append("  ")
                     .Append(stew.LiquidVisualData == null ? "none" : stew.LiquidVisualData.name).Append("  x").Append(Claims.Number(stew.BaseEffectsMultiplier))
-                    .Append(" x").Append(Claims.Number(stew.BaseLiquidEffectsMultiplier)).Append(" x").Append(Claims.Number(stew.ExtraEffectsMultiplier)).Append('\n');
+                    .Append(" x").Append(Claims.Number(stew.BaseLiquidEffectsMultiplier)).Append(" x").Append(Claims.Number(stew.ExtraEffectsMultiplier))
+                    .Append("  xp ").Append(stew.IsAwardingExperienceStage ? "yes" : "no").Append(VanillaReport.ChangedBy(stew)).Append('\n');
             }
             text.Append('\n');
         }

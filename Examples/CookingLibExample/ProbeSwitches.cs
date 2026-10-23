@@ -5,6 +5,7 @@ using System.Text;
 using Alta.Console;
 using CookingLib;
 using MelonLoader;
+using UnityEngine;
 
 namespace CookingLibExample
 {
@@ -37,6 +38,16 @@ namespace CookingLibExample
             Rules("big", "Ingredients 8", new PotRulesSpec { Id = "example.bigpot", Ingredients = 8 }),
             Rules("feed10", "GlobalEffects Feed 10", new PotRulesSpec { Id = "example.feed10", GlobalEffects = new List<EffectSpec> { new EffectSpec { Effect = "Feed", Strength = 10f } } }),
             Rules("feed5", "GlobalEffects Feed 5", new PotRulesSpec { Id = "example.feed5", GlobalEffects = new List<EffectSpec> { new EffectSpec { Effect = "Feed", Strength = 5f } } }),
+            Rules("norecipe", "NoRecipeStew Pumpkin Recipe Raw Stew, so a pot that matches no recipe looks like pumpkin stew", new PotRulesSpec { Id = "example.norecipe", NoRecipeStew = "Pumpkin Recipe Raw Stew" }),
+            Rules("push0", "RejectionForce 0, so a locked pot keeps an ingredient dropped in", new PotRulesSpec { Id = "example.push0", RejectionForce = 0f }),
+            Rules("push1000", "RejectionForce 1000", new PotRulesSpec { Id = "example.push1000", RejectionForce = 1000f }),
+            Stew("stew", "Non Recipe Raw Stew counts its ingredients x1.5 and turns green, on stews already in pots too", new StewSpec
+            {
+                Id = "example.nonrecipestew",
+                Stew = "Non Recipe Raw Stew",
+                Ingredients = 1.5f,
+                Tint = new Color(0.2f, 0.8f, 0.2f)
+            }),
             new Switch("nowater", "players can't drink the game's Water", () =>
             {
                 Drinks.CanDrink += RefuseWater;
@@ -107,6 +118,9 @@ namespace CookingLibExample
 
         static Switch Rules(string name, string help, PotRulesSpec spec) =>
             new Switch(name, help, () => PotRules.Set(spec).Error, () => PotRules.Remove(spec.Id));
+
+        static Switch Stew(string name, string help, StewSpec spec) =>
+            new Switch(name, help, () => VanillaStews.Modify(spec).Error, () => VanillaStews.Revert(spec.Id));
 
         static string SaveWater(bool on)
         {

@@ -155,8 +155,8 @@ namespace CookingLib
                 CookingGarnish garnish = Garnish(item);
                 if (garnish == null)
                     continue;
-                rows.Add(Row("garnish", "adds", item.name, item.Hash, StageOf(item), garnish.Effects));
-                rows.Add(Row("garnish", "times", item.name, item.Hash, StageOf(item), garnish.EffectMultipliers));
+                rows.Add(Row("garnish", "adds", item.name, item.Hash, StageOf(item), garnish.Effects, null, garnish, Before(garnish), "effects"));
+                rows.Add(Row("garnish", "times", item.name, item.Hash, StageOf(item), garnish.EffectMultipliers, null, garnish, Before(garnish, VanillaEdits.GarnishMultipliers), "multipliers"));
             }
             return rows;
         }
@@ -198,7 +198,7 @@ namespace CookingLib
                 StewComponent stew = entry.Stew;
                 string multipliers = "liquid " + Number(stew.BaseLiquidEffectsMultiplier) + ", ingredients " + Number(stew.BaseEffectsMultiplier)
                     + ", extras " + Number(stew.ExtraEffectsMultiplier) + (entry.IsFinal ? ", final" : "");
-                rows.Add(Row("stage", how, entry.Name, entry.Hash, entry.Stage.ToString(), null, multipliers));
+                rows.Add(Row("stage", how, entry.Name, entry.Hash, entry.Stage.ToString(), null, multipliers, stew));
             }
             return rows;
         }
@@ -310,6 +310,9 @@ namespace CookingLib
 
         static IEnumerable<EffectDefinitionApplication> Before(object target) =>
             target == null ? null : VanillaEdits.Of(target).FirstOrDefault(e => e.Field == "effects")?.Original as IEnumerable<EffectDefinitionApplication>;
+
+        static IEnumerable<EffectDefinitionApplication> Before(object target, FieldInfo field) =>
+            target == null ? null : VanillaEdits.Original(target, field, null) as IEnumerable<EffectDefinitionApplication>;
 
         static Line Row(string kind, string how, string name, uint hash, string stage, IEnumerable<EffectDefinitionApplication> effects, string extra = null,
             object target = null, IEnumerable<EffectDefinitionApplication> before = null, string field = null)

@@ -22,7 +22,6 @@ namespace CookingLib
         static readonly AccessTools.FieldRef<CookingPot, StewManager> potManager = AccessTools.FieldRefAccess<CookingPot, StewManager>("stewManager");
         static readonly AccessTools.FieldRef<StewManager, StewComponent> managerStew = AccessTools.FieldRefAccess<StewManager, StewComponent>("stew");
         static readonly AccessTools.FieldRef<StewManager, StewRecipe> managerRecipe = AccessTools.FieldRefAccess<StewManager, StewRecipe>("currentRecipe");
-        static readonly FieldInfo pushField = typeof(CookingSettings).GetField("ingredientRejectionForce", PrivateInstance);
         static readonly string[] mouthFields = { "statToMonitor", "effectHandlingStrength", "canConsumeWastefully", "canConsumeWhenStatIsFull" };
 
         internal static string Run()
@@ -72,7 +71,7 @@ namespace CookingLib
             Definitions(text);
             Knobs(text);
             CookingSettings settings = PotKnobs.Settings;
-            text.Append("rejection push ").Append(pushField == null ? "?" : Show(pushField.GetValue(settings))).Append(", fade out ").Append(Claims.Number(settings.CookableAddedToStewFadeoutDuration))
+            text.Append("fade out ").Append(Claims.Number(settings.CookableAddedToStewFadeoutDuration))
                 .Append(" s, missing modifiers count as 1 ").Append(settings.IsAssumingNoEffectModificationOnMissing).Append(", decay ").Append(Claims.Number(settings.CookableDecayDuration))
                 .Append(" s, items in a stew at most ").Append(settings.MaxNumberOfItemsInStew).Append('\n');
             Mouths(text);
@@ -94,7 +93,11 @@ namespace CookingLib
         {
             text.Append("stewing temperature ").Append(Claims.Number(PotKnobs.LiveTemperature)).Append(" (game ").Append(Claims.Number(PotKnobs.GameTemperature))
                 .Append("), every stew gets ").Append(Claims.Effects(PotKnobs.LiveGlobal)).Append(" (game ").Append(Claims.Effects(PotKnobs.GameGlobal)).Append(")\n");
+            text.Append("no recipe stew ").Append(PrefabName(PotKnobs.LiveNoRecipe)).Append(" (game ").Append(PrefabName(PotKnobs.GameNoRecipe))
+                .Append("), locked pot push ").Append(Claims.Number(PotKnobs.LivePush)).Append(" (game ").Append(Claims.Number(PotKnobs.GamePush)).Append(")\n");
         }
+
+        static string PrefabName(NetworkPrefab prefab) => prefab == null ? "none" : prefab.name + " " + prefab.Hash;
 
         static void Rules(StringBuilder text)
         {
@@ -133,6 +136,10 @@ namespace CookingLib
                 parts.Add("StewingTemperature " + Claims.Number(spec.StewingTemperature.Value) + Game(known ? Claims.Number(PotKnobs.GameTemperature) : null));
             if (rules.GlobalEffects != null)
                 parts.Add("GlobalEffects " + Claims.Effects(rules.GlobalEffects) + Game(known ? Claims.Effects(PotKnobs.GameGlobal) : null));
+            if (spec.NoRecipeStew != null)
+                parts.Add("NoRecipeStew " + (rules.NoRecipeStew != null ? rules.NoRecipeStew.name : spec.NoRecipeStew.Trim()) + Game(known && PotKnobs.GameNoRecipe != null ? PotKnobs.GameNoRecipe.name : null));
+            if (spec.RejectionForce.HasValue)
+                parts.Add("RejectionForce " + Claims.Number(spec.RejectionForce.Value) + Game(known ? Claims.Number(PotKnobs.GamePush) : null));
             return string.Join(", ", parts.ToArray());
         }
 
@@ -147,6 +154,14 @@ namespace CookingLib
                 warnings.Add("a full pot's stew can carry Feed " + Claims.Number(worst) + ", past the game's own " + Claims.Number(game) + ", so players are refused stews at a fullness the game allows");
             if (PotKnobs.LiveTemperature > 95f)
                 warnings.Add("stewing above 95 may never happen if the pot water can't get that hot");
+
+            NetworkPrefab noRecipe = PotKnobs.LiveNoRecipe;
+            if (noRecipe != null && noRecipe != PotKnobs.GameNoRecipe)
+            {
+                List<StewRecipe> recipes = StewStages.Get(noRecipe.Hash)?.Recipes ?? new List<StewRecipe>();
+                if (recipes.Count > 0)
+                    warnings.Add("the no recipe stew " + noRecipe.name + " is the look of " + string.Join(", ", recipes.Select(RecipeName).ToArray()) + ", so a pot that matches no recipe shows that stew and gives none of its effects");
+            }
 
             if (PotKnobs.LiveGlobal.Length == 0)
             {

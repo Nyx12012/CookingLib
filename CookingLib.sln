@@ -9,6 +9,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{B3
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CookingLibExample", "Examples\CookingLibExample\CookingLibExample.csproj", "{3FA9BA27-68CE-4B47-AADA-C25B400D4E1F}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CookingLib.Tests", "tests\CookingLib.Tests\CookingLib.Tests.csproj", "{AC580A4F-724F-4ADE-B077-F23379F80C08}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,11 +47,24 @@ Global
 		{3FA9BA27-68CE-4B47-AADA-C25B400D4E1F}.Release|x64.Build.0 = Release|Any CPU
 		{3FA9BA27-68CE-4B47-AADA-C25B400D4E1F}.Release|x86.ActiveCfg = Release|Any CPU
 		{3FA9BA27-68CE-4B47-AADA-C25B400D4E1F}.Release|x86.Build.0 = Release|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Debug|x64.Build.0 = Debug|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Debug|x86.Build.0 = Debug|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Release|x64.ActiveCfg = Release|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Release|x64.Build.0 = Release|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Release|x86.ActiveCfg = Release|Any CPU
+		{AC580A4F-724F-4ADE-B077-F23379F80C08}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{3FA9BA27-68CE-4B47-AADA-C25B400D4E1F} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
+		{AC580A4F-724F-4ADE-B077-F23379F80C08} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

@@ -27,6 +27,9 @@ namespace CookingLib
         /// <summary>Optional colour in place of the borrowed stew's own. Every channel from 0 to 1.</summary>
         public Color? Tint;
 
+        /// <summary>True keeps this recipe's own colour on a base liquid that sets ColorsStews.</summary>
+        public bool IgnoresDyes;
+
         /// <summary>Optional registered id or vanilla liquid name the pot holds instead of the stew.</summary>
         public string ResultLiquid;
     }

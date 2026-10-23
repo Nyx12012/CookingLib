@@ -19,17 +19,20 @@ namespace CookingLib
         static readonly FieldInfo splashField = typeof(LiquidData).GetField("splashParticlesStrength", PrivateInstance);
         static readonly FieldInfo dataField = typeof(LiquidDefinition).GetField("data", PrivateInstance);
 
-        internal static LiquidData BuildData(LiquidSpec spec)
+        internal static LiquidData BuildData(LiquidSpec spec, EffectKinds allowed)
         {
-            LiquidVisualData look = Names.Need<LiquidVisualData>(spec.Look, "liquid look");
+            LiquidVisualData look = Names.Need<LiquidVisualData>(spec.Look, "liquid look", "Liquid looks");
 
             List<EffectDefinitionApplication> effects = new List<EffectDefinitionApplication>();
             foreach (EffectSpec effect in spec.Effects)
-                effects.Add(new EffectDefinitionApplication(Names.Need<EffectDefinition>(effect.Effect, "effect"), effect.Strength));
+            {
+                EffectDefinition definition = EffectNames.Need(effect.Effect, allowed);
+                effects.Add(new EffectDefinitionApplication(definition, effect.Strength, EffectSpread.Check(effect, definition)));
+            }
 
             List<LiquidVisualChunkDefinition> chunks = new List<LiquidVisualChunkDefinition>();
             foreach (string chunk in spec.Chunks)
-                chunks.Add(Names.Need<LiquidVisualChunkDefinition>(chunk, "chunk"));
+                chunks.Add(Names.Need<LiquidVisualChunkDefinition>(chunk, "chunk", "Chunks"));
 
             LiquidData data = new LiquidData(look, effects.ToArray(), new CookableItem[0], chunks.ToArray(), spec.Color);
             skinField.SetValue(data, spec.ConsumableThroughSkin);
@@ -41,6 +44,7 @@ namespace CookingLib
         {
             LiquidDefinition definition = ScriptableObject.CreateInstance<LiquidDefinition>();
             definition.name = name;
+            definition.hideFlags = HideFlags.DontUnloadUnusedAsset;
             dataField.SetValue(definition, data);
             Registry.SetHash(definition, hash);
             return definition;

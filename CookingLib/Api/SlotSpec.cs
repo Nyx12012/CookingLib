@@ -10,5 +10,8 @@ namespace CookingLib
 
         /// <summary>A vanilla cookable category instead of Items, copied from the dump.</summary>
         public string Category;
+
+        /// <summary>A game glyph from the dump the recipe page shows for an Items slot. Null shows the first item's own. A Category slot always shows its category's.</summary>
+        public string Glyph;
     }
 }

@@ -26,15 +26,17 @@ namespace CookingLib
         /// <summary>The liquid data every container holding this liquid points at.</summary>
         public LiquidData Data { get; internal set; }
 
-        /// <summary>A shared liquid's registered definition, or a server only liquid's private stand in.</summary>
-        public LiquidDefinition Definition { get; internal set; }
+        /// <summary>A shared liquid's registered definition. Null for a server only liquid, so key those by Id.</summary>
+        public LiquidDefinition Definition => IsShared ? BaseDefinition : null;
+
+        internal LiquidDefinition BaseDefinition { get; set; }
 
         internal string Fingerprint { get; set; }
 
         internal LiquidContent CreateContent()
         {
             if (IsShared)
-                return Definition.GetAsLiquidContent();
+                return BaseDefinition.GetAsLiquidContent();
             return new LiquidContent { IsCustom = true, Data = Data };
         }
     }

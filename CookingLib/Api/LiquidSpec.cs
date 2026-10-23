@@ -30,6 +30,12 @@ namespace CookingLib
         /// <summary>How strong a splash is when ConsumableThroughSkin is true.</summary>
         public float SplashStrength = 1f;
 
+        /// <summary>True makes a stew cooked on this liquid take its colour at every stage, unless the recipe sets IgnoresDyes. A recipe's ResultLiquid is never recoloured.</summary>
+        public bool ColorsStews;
+
+        /// <summary>True lets the game's Water recipes also match a pot of this liquid. A recipe that lists this liquid still wins.</summary>
+        public bool CountsAsWater;
+
         /// <summary>Thirst this liquid gives, for thirst mods such as HydrateOrDiedrate. CookingLib only stores it. Minus 100 to 100, where 100 is a full thirst bar and negative makes the drinker thirstier. Null leaves it to the thirst mod, HydrateOrDiedrate then uses 40.</summary>
         public float? Thirst { get; set; }
     }

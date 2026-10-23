@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Alta.Cooking;
 using Alta.Liquid;
 using HarmonyLib;
 using UnityEngine;
@@ -16,12 +17,14 @@ namespace CookingLib
 
         internal static int Refused { get; private set; }
 
+        internal static int PotBases { get; private set; }
+
         internal static void Apply(HarmonyLib.Harmony harmony)
         {
             if (endlessField == null)
                 throw new MissingFieldException("LiquidContainer", "isInfiniteSource");
             harmony.Patch(AccessTools.Method(typeof(LiquidContainerTrigger), nameof(LiquidContainerTrigger.OnTriggerEnter)),
-                postfix: new HarmonyMethod(typeof(InfusionPatch), nameof(Postfix)));
+                postfix: new HarmonyMethod(typeof(InfusionPatch), nameof(Postfix)) { priority = Priority.Last });
         }
 
         internal static bool IsEndless(LiquidContainer container) => (bool)endlessField.GetValue(container);
@@ -68,6 +71,17 @@ namespace CookingLib
             Done++;
             if (infusion.Spec.ConsumeItem)
                 pickup.Entity.Spawner.Destroy(pickup.Entity.PrefabRoot);
+            FollowBase(container, infusion.Output.Definition);
+        }
+
+        static void FollowBase(LiquidContainer container, LiquidDefinition definition)
+        {
+            StewManager stews = container.GetComponentInParent<StewManager>();
+            if (stews == null || definition == null || stews.Ingredients.Count > 0)
+                return;
+
+            stews.SetBaseLiquid(definition);
+            PotBases++;
         }
 
         static void Note(ILiquidContainer target, LiquidContainer container, bool refused)

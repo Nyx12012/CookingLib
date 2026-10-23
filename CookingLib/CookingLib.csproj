@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
@@ -13,6 +13,7 @@
     <Reference Include="$(GamePath)\MelonLoader\net35\0Harmony.dll" Private="false" />
     <Reference Include="$(GamePath)\A Township Tale_Data\Managed\Root.Township.dll" Private="false" />
     <Reference Include="$(GamePath)\A Township Tale_Data\Managed\Alta.Values.dll" Private="false" />
+    <Reference Include="$(GamePath)\A Township Tale_Data\Managed\Alta.Global.Runtime.dll" Private="false" />
     <Reference Include="$(GamePath)\A Township Tale_Data\Managed\UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="$(GamePath)\A Township Tale_Data\Managed\UnityEngine.PhysicsModule.dll" Private="false" />
   </ItemGroup>

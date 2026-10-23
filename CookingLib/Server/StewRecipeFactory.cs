@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Alta;
 using Alta.Alchemy;
 using Alta.Cooking;
 using Alta.Inventory;
 using Alta.Liquid;
 using Alta.Networking;
+using Alta.Pages;
 using UnityEngine;
 
 namespace CookingLib
@@ -24,11 +26,49 @@ namespace CookingLib
 
         internal static void Build(LibStewRecipe lib)
         {
-            StewRecipeSpec spec = lib.Spec;
-            uint look = Look(spec.Look);
-            List<LiquidDefinition> liquids = spec.BaseLiquids.Select(name => LiquidRef.Resolve(name).Definition).ToList();
-            LiquidRef result = string.IsNullOrEmpty(spec.ResultLiquid) ? null : LiquidRef.Resolve(spec.ResultLiquid);
+            Resolve(lib.Spec, out uint look, out List<LiquidDefinition> liquids, out LiquidRef result);
+            StewRecipe recipe = Create(lib.Spec, Registry.NumberFor(lib.Spec.Id));
+            if (!Registry.Add(recipe))
+                throw new ArgumentException("recipe number " + recipe.Hash + " is taken, pick another id");
 
+            Write(lib, recipe, look, liquids, result);
+        }
+
+        internal static StewRecipe BuildPage(LibStewRecipe lib)
+        {
+            StewRecipe recipe = Create(lib.Spec, lib.Number);
+            PageBudget.Check(PageKind.Recipe, lib.Id + "'s recipe page", recipe.ExtraEffects.Concat(recipe.EffectModifiers), recipe.StewIngredients.Count);
+            return recipe;
+        }
+
+        internal static void Cook(LibStewRecipe lib)
+        {
+            Resolve(lib.Spec, out uint look, out List<LiquidDefinition> liquids, out LiquidRef result);
+            Write(lib, lib.Recipe, look, liquids, result);
+        }
+
+        internal static List<int> BlankSlots(StewRecipe recipe) =>
+            Enumerable.Range(0, recipe.StewIngredients.Count).Where(i => recipe.StewIngredients[i] == null || recipe.StewIngredients[i].glyph == null).Select(i => i + 1).ToList();
+
+        static void Resolve(StewRecipeSpec spec, out uint look, out List<LiquidDefinition> liquids, out LiquidRef result)
+        {
+            look = Look(spec.Look);
+            liquids = spec.BaseLiquids.Select(name => LiquidRef.Resolve(name).Definition).ToList();
+            if (liquids.Any(liquid => liquid == null))
+                throw new ArgumentException("a base liquid has no definition");
+            result = string.IsNullOrEmpty(spec.ResultLiquid) ? null : LiquidRef.Resolve(spec.ResultLiquid);
+        }
+
+        static void Write(LibStewRecipe lib, StewRecipe recipe, uint look, List<LiquidDefinition> liquids, LiquidRef result)
+        {
+            lookField.SetValue(recipe, look);
+            liquidsField.SetValue(recipe, liquids);
+            lib.Recipe = recipe;
+            lib.Result = result;
+        }
+
+        static StewRecipe Create(StewRecipeSpec spec, uint number)
+        {
             List<EffectDefinitionApplication> modifiers = new List<EffectDefinitionApplication>();
             foreach (EffectSpec effect in spec.EffectModifiers)
                 AddOnce(modifiers, effect, "modifier");
@@ -43,17 +83,13 @@ namespace CookingLib
 
             StewRecipe recipe = ScriptableObject.CreateInstance<StewRecipe>();
             recipe.name = spec.Id;
-            Registry.SetHash(recipe, HashFor(spec.Id));
-            lookField.SetValue(recipe, look);
-            liquidsField.SetValue(recipe, liquids);
+            recipe.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            Registry.SetHash(recipe, number);
+            liquidsField.SetValue(recipe, new List<LiquidDefinition>());
             slotsField.SetValue(recipe, slots);
             extraField.SetValue(recipe, extra.ToArray());
             modifiersField.SetValue(recipe, modifiers.ToArray());
-            if (!Registry.Add(recipe))
-                throw new ArgumentException("recipe number " + recipe.Hash + " is taken, pick another id");
-
-            lib.Recipe = recipe;
-            lib.Result = result;
+            return recipe;
         }
 
         static uint Look(string name)
@@ -62,15 +98,21 @@ namespace CookingLib
             if (vanilla != null && StewRecipes.Find(vanilla) == null)
                 return vanilla.BaseVersionHash;
 
-            NetworkPrefab prefab = Names.NeedPrefab(name);
+            NetworkPrefab prefab = Names.FindPrefab(name);
+            if (prefab == null)
+                throw new ArgumentException("no stew recipe or prefab named '" + name + "'" + Names.Suggest(name, LookNames(), "Stews"));
             if (prefab.GetComponent<StewComponent>() == null)
                 throw new ArgumentException(prefab.name + " is not a stew, Look takes a stew recipe or a stew prefab");
             return prefab.Hash;
         }
 
+        static IEnumerable<string> LookNames() =>
+            HashedGeneralValue<StewRecipe>.All.Where(recipe => recipe != null && StewRecipes.Find(recipe) == null).Select(recipe => recipe.name)
+                .Concat(PrefabWalk.With<StewComponent>().Select(prefab => prefab.name));
+
         static void AddOnce(List<EffectDefinitionApplication> list, EffectSpec effect, string kind)
         {
-            EffectDefinition definition = Names.Need<EffectDefinition>(effect.Effect, "effect");
+            EffectDefinition definition = EffectNames.Need(effect.Effect, EffectNames.ForServer);
             if (list.Any(existing => existing.EffectToModify == definition))
                 throw new ArgumentException(kind + " " + definition.name + " is listed twice");
             list.Add(new EffectDefinitionApplication(definition, effect.Strength));
@@ -82,32 +124,24 @@ namespace CookingLib
                 return Names.NeedCategory(slot.Category);
 
             List<CookableItem> cookables = new List<CookableItem>();
-            foreach (string itemName in slot.Items)
+            Glyph glyph = string.IsNullOrEmpty(slot.Glyph) ? null : Names.Need<Glyph>(slot.Glyph, "glyph", "Glyphs");
+            for (int i = 0; i < slot.Items.Count; i++)
             {
+                string itemName = slot.Items[i];
                 Item item = Names.NeedItem(itemName);
-                CookableItem cookable = item.GetComponent<CookableItem>();
-                if (cookable == null || cookable.GetType() != typeof(CookableItem))
-                    throw new ArgumentException(item.name + " can't go in a stew");
-                if (!cookables.Contains(cookable))
+                if (i == 0 && string.IsNullOrEmpty(slot.Glyph))
+                    glyph = item.Glyph;
+                CookableItem cookable = Main.IsServer ? SlotItems.Resolve(itemName) : SlotItems.OnPage(item);
+                if (cookable != null && !cookables.Contains(cookable))
                     cookables.Add(cookable);
             }
 
             CookableCollectionDefinition collection = ScriptableObject.CreateInstance<CookableCollectionDefinition>();
             collection.name = name;
+            collection.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            collection.glyph = glyph;
             cookablesField.SetValue(collection, cookables);
             return collection;
-        }
-
-        static uint HashFor(string id)
-        {
-            uint hash = 2166136261;
-            foreach (char c in id.ToLowerInvariant())
-            {
-                hash ^= c;
-                hash *= 16777619;
-            }
-            hash &= 0x7FFFFFFF;
-            return hash <= 65535 ? hash + 65536 : hash;
         }
     }
 }

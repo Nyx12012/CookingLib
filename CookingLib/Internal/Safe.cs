@@ -9,11 +9,38 @@ namespace CookingLib
 
         internal static int Failures { get; private set; }
 
-        internal static void Fail(string patch, Exception e)
+        internal static void Fail(string name, Exception e)
         {
             Failures++;
-            if (logged.Add(patch))
-                Log.Error(patch + " failed, the game carries on without it: " + e);
+            if (logged.Add(name))
+                Log.Error(name + " failed, the game carries on without it: " + e);
+        }
+
+        internal static bool Run(string name, Action body)
+        {
+            try
+            {
+                body();
+                return true;
+            }
+            catch (Exception e)
+            {
+                Fail(name, e);
+                return false;
+            }
+        }
+
+        internal static T Run<T>(string name, Func<T> body, T fallback)
+        {
+            try
+            {
+                return body();
+            }
+            catch (Exception e)
+            {
+                Fail(name, e);
+                return fallback;
+            }
         }
     }
 }

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Alta.Liquid;
 
 namespace CookingLib
@@ -15,7 +17,7 @@ namespace CookingLib
 
         internal LiquidDefinition Vanilla { get; }
 
-        internal LiquidDefinition Definition => Lib != null ? Lib.Definition : Vanilla;
+        internal LiquidDefinition Definition => Lib != null ? Lib.BaseDefinition : Vanilla;
 
         internal static LiquidRef Resolve(string name)
         {
@@ -23,10 +25,15 @@ namespace CookingLib
             if (lib != null)
                 return new LiquidRef(lib, null);
 
-            LiquidDefinition vanilla = Names.Find<LiquidDefinition>(name);
-            if (vanilla == null)
-                throw new ArgumentException("no liquid named '" + name + "'");
-            return new LiquidRef(null, vanilla);
+            LiquidDefinition found = Names.Find<LiquidDefinition>(name);
+            if (found != null)
+            {
+                LibLiquid ours = Liquids.FindByDefinition(found);
+                return ours != null ? new LiquidRef(ours, null) : new LiquidRef(null, found);
+            }
+
+            IEnumerable<string> names = Liquids.All.Where(l => l.Error == null).Select(l => l.Id).Concat(Liquids.GameLiquids().Select(l => l.name));
+            throw new ArgumentException("no liquid named '" + name + "'" + Names.Suggest(name, names, "Liquids"));
         }
 
         internal bool Matches(LiquidContent content)

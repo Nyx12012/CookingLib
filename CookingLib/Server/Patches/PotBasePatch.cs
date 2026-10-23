@@ -32,7 +32,7 @@ namespace CookingLib
 
                 LibLiquid liquid = Liquids.FindServerOnly(content.Data);
                 if (liquid != null)
-                    ___stewManager.SetBaseLiquid(liquid.Definition);
+                    ___stewManager.SetBaseLiquid(liquid.BaseDefinition);
             }
             catch (Exception e)
             {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Alta;
 using Alta.Liquid;
 
@@ -49,15 +50,41 @@ namespace CookingLib
 
             foreach (LibLiquid liquid in all)
             {
-                if (liquid.Error == null && liquid.IsShared && ReferenceEquals(liquid.Definition, content.Liquid))
+                if (liquid.Error == null && liquid.IsShared && ReferenceEquals(liquid.BaseDefinition, content.Liquid))
                     return liquid;
             }
             return null;
         }
 
-        internal static LibLiquid FindServerOnly(LiquidData data)
+        /// <summary>What a liquid is: a game liquid, a CookingLib liquid, a stew or something else. Null for null. Answers are cached, so it is cheap to call often.</summary>
+        public static LiquidInfo Identify(LiquidData data) => LiquidIdentity.Identify(data);
+
+        /// <summary>What the liquid in this content is, for example container.ContainedLiquid. Null for an empty container.</summary>
+        public static LiquidInfo Identify(LiquidContent content) => content is null ? null : LiquidIdentity.Identify(content.Data);
+
+        internal static bool ServerOnlySpreads { get; private set; }
+
+        internal static LibLiquid FindByDefinition(LiquidDefinition definition)
         {
-            if (data == null)
+            if (ReferenceEquals(definition, null))
+                return null;
+
+            foreach (LibLiquid liquid in all)
+            {
+                if (liquid.Error == null && ReferenceEquals(liquid.BaseDefinition, definition))
+                    return liquid;
+            }
+            return null;
+        }
+
+        internal static IEnumerable<LiquidDefinition> GameLiquids() =>
+            HashedGeneralValue<LiquidDefinition>.All.Where(definition => definition != null && FindByDefinition(definition) == null).ToList();
+
+        internal static LibLiquid FindServerOnly(LiquidData data) => FindServerOnlyByReference(data) ?? FindServerOnlyByFingerprint(data);
+
+        internal static LibLiquid FindServerOnlyByReference(LiquidData data)
+        {
+            if (data is null)
                 return null;
 
             foreach (LibLiquid liquid in all)
@@ -65,6 +92,13 @@ namespace CookingLib
                 if (liquid.Error == null && !liquid.IsShared && ReferenceEquals(liquid.Data, data))
                     return liquid;
             }
+            return null;
+        }
+
+        internal static LibLiquid FindServerOnlyByFingerprint(LiquidData data)
+        {
+            if (data is null)
+                return null;
 
             string fingerprint = LiquidFactory.Fingerprint(data);
             foreach (LibLiquid liquid in all)
@@ -81,20 +115,23 @@ namespace CookingLib
             try
             {
                 Validate(spec);
-                LiquidData data = LiquidFactory.BuildData(spec);
+                LiquidData data = LiquidFactory.BuildData(spec, shared ? EffectNames.ForShared : EffectNames.ForServer);
+                string fingerprint = LiquidFactory.Fingerprint(data);
+                LiquidDefinition definition;
                 if (shared)
                 {
-                    LiquidDefinition definition = LiquidFactory.BuildDefinition(spec.Name ?? spec.Id, data, hash);
+                    definition = LiquidFactory.BuildDefinition(spec.Name ?? spec.Id, data, hash);
                     SharedLiquidRegistrar.Register(definition);
-                    liquid.Definition = definition;
                 }
                 else
                 {
-                    string fingerprint = LiquidFactory.Fingerprint(data);
                     CheckLookalikes(fingerprint);
-                    liquid.Fingerprint = fingerprint;
-                    liquid.Definition = LiquidFactory.BuildDefinition(spec.Name ?? spec.Id, data, LiquidFactory.WaterHash);
+                    definition = LiquidFactory.BuildDefinition("cookinglib " + spec.Id, data, Registry.NumberFor(spec.Id));
+                    if (Main.IsServer && !Registry.Add(definition))
+                        throw new ArgumentException("liquid number " + definition.Hash + " is taken, pick another id");
                 }
+                liquid.BaseDefinition = definition;
+                liquid.Fingerprint = fingerprint;
                 liquid.Data = data;
             }
             catch (Exception e)
@@ -103,10 +140,13 @@ namespace CookingLib
             }
 
             all.Add(liquid);
+            LiquidIdentity.Forget();
+            if (liquid.Error == null && !shared && EffectSpread.Any(spec.Effects))
+                ServerOnlySpreads = true;
             if (liquid.Error != null)
                 Log.Warn("liquid " + liquid.Id + " refused: " + liquid.Error);
             else
-                Log.Info("liquid " + liquid.Id + " registered, " + (shared ? "shared as " + hash : "server only"));
+                Log.Info("liquid " + liquid.Id + " registered, " + (shared ? "shared as " + hash : "server only, pot number " + liquid.BaseDefinition.Hash));
             return liquid;
         }
 
@@ -139,9 +179,9 @@ namespace CookingLib
                 if (other.Error == null && other.Fingerprint == fingerprint)
                     throw new ArgumentException("looks exactly like " + other.Id + ", change its colour, look, effects or chunks");
             }
-            foreach (LiquidDefinition vanilla in HashedGeneralValue<LiquidDefinition>.All)
+            foreach (LiquidDefinition vanilla in GameLiquids())
             {
-                if (vanilla != null && vanilla.Data != null && LiquidFactory.Fingerprint(vanilla.Data) == fingerprint)
+                if (vanilla.Data != null && LiquidFactory.Fingerprint(vanilla.Data) == fingerprint)
                     throw new ArgumentException("looks exactly like the game's " + vanilla.name + ", change its colour, look, effects or chunks");
             }
         }

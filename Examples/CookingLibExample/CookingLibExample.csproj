@@ -3,13 +3,14 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\CookingLib\CookingLib.csproj" Private="false" />
     <Reference Include="$(GamePath)\MelonLoader\net35\MelonLoader.dll" Private="false" />
     <Reference Include="$(GamePath)\A Township Tale_Data\Managed\Root.Township.dll" Private="false" />
+    <Reference Include="$(GamePath)\A Township Tale_Data\Managed\Alta.Values.dll" Private="false" />
     <Reference Include="$(GamePath)\A Township Tale_Data\Managed\UnityEngine.CoreModule.dll" Private="false" />
   </ItemGroup>
 

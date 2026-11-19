@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CookingLib\CookingLib.csproj" />
+    <Reference Include="$(GamePath)\A Township Tale_Data\Managed\UnityEngine.CoreModule.dll" Private="false" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>GamePath</_Parameter1>
       <_Parameter2>$(GamePath)</_Parameter2>

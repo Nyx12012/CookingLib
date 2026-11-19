@@ -57,7 +57,21 @@ namespace CookingLib
         internal static EffectKinds KindOf(EffectDefinition effect)
         {
             TakeGameSnapshot();
-            return effect != null && game.Contains(effect) ? EffectKinds.Game : EffectKinds.None;
+            if (effect == null)
+                return EffectKinds.None;
+            return game.Contains(effect) ? EffectKinds.Game : Effects.KindOf(effect);
+        }
+
+        internal static EffectDefinition Need(EffectSpec spec, EffectKinds allowed)
+        {
+            EffectDefinition effect = Need(spec.Effect, allowed);
+            if (spec.Seconds == 0)
+                return effect;
+            if (spec.Seconds < 0)
+                throw new ArgumentException("Seconds must be 1 to " + EffectFactory.MaxSeconds + ", or 0 for the effect's own length");
+            if (KindOf(effect) != EffectKinds.Game)
+                throw new ArgumentException("Seconds works on the game's buffs, register a copy with its own Seconds for " + effect.name);
+            return Effects.WithSeconds(effect, spec.Seconds, allowed);
         }
 
         internal static EffectDefinition Need(string name, EffectKinds allowed)
@@ -69,8 +83,18 @@ namespace CookingLib
 
             EffectDefinition other = Names.Find<EffectDefinition>(name);
             if (other != null)
-                throw new ArgumentException("effect " + other.name + " is not one of the game's own effects");
+                throw new ArgumentException(Refusal(other, allowed));
             throw new ArgumentException("no effect named '" + name + "'" + Names.Suggest(name, candidates.Select(e => e.name), "Effects", aliases.SelectMany(a => a.Spellings)));
+        }
+
+        static string Refusal(EffectDefinition effect, EffectKinds allowed)
+        {
+            EffectKinds kind = KindOf(effect);
+            if (kind == EffectKinds.ServerOnly)
+                return "effect " + effect.name + " is server only, and " + ((allowed & EffectKinds.Shared) != 0 ? "a shared liquid" : "this") + " can only carry the game's and shared effects";
+            if (kind == EffectKinds.Shared || kind == EffectKinds.Placeholder)
+                return "effect " + effect.name + " can't be used here, only the game's own effects";
+            return "effect " + effect.name + " is not one of the game's own effects";
         }
 
         internal static EffectAlias UsedAlias(string name)

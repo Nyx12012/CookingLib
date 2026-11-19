@@ -1,4 +1,5 @@
 using Alta.Liquid;
+using UnityEngine;
 
 namespace CookingLib
 {
@@ -32,6 +33,10 @@ namespace CookingLib
         internal LiquidDefinition BaseDefinition { get; set; }
 
         internal string Fingerprint { get; set; }
+
+        internal Color? Shade { get; set; }
+
+        internal string ShadeNote { get; set; }
 
         internal LiquidContent CreateContent()
         {

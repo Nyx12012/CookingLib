@@ -74,6 +74,8 @@ namespace CookingLib
             List<string> parts = new List<string>();
             if (spec.Tint.HasValue)
                 parts.Add("Tint");
+            if (!string.IsNullOrEmpty(spec.Shade))
+                parts.Add("Shade");
             if (spec.IgnoresDyes)
                 parts.Add("IgnoresDyes");
             if (!string.IsNullOrEmpty(spec.ResultLiquid))
@@ -153,7 +155,7 @@ namespace CookingLib
                 }
 
                 VanillaRecipeSpec spec = edit.Spec;
-                bool colour = spec.Tint.HasValue || spec.IgnoresDyes;
+                bool colour = spec.Tint.HasValue || spec.IgnoresDyes || !string.IsNullOrEmpty(spec.Shade);
                 if (!colour && edit.Result == null)
                     continue;
                 if (!overrides.TryGetValue(edit.Recipe, out Override found))
@@ -161,6 +163,7 @@ namespace CookingLib
                 if (colour)
                 {
                     found.Tint = spec.Tint;
+                    found.Shade = string.IsNullOrEmpty(spec.Shade) ? (Color?)null : Colors.Parse(spec.Shade);
                     found.IgnoresDyes = spec.IgnoresDyes;
                 }
                 if (edit.Result != null)
@@ -210,7 +213,7 @@ namespace CookingLib
                 }
                 else
                 {
-                    edit.Result = string.IsNullOrEmpty(spec.ResultLiquid) ? null : LiquidRef.Resolve(spec.ResultLiquid);
+                    edit.Result = StageResults.Resolve(spec.ResultLiquid, spec.StageResults);
                     if (spec.BaseLiquids != null)
                     {
                         edit.Bases = spec.BaseLiquids.Select(name => LiquidRef.Resolve(name).Definition).ToList();
@@ -218,7 +221,7 @@ namespace CookingLib
                             throw new ArgumentException("a base liquid has no definition");
                         VanillaEdits.Write(Key(recipe, "base liquids"), recipe, bases, VanillaEdits.PossibleLiquids, new List<LiquidDefinition>(edit.Bases));
                     }
-                    if (spec.Tint.HasValue || spec.IgnoresDyes)
+                    if (spec.Tint.HasValue || spec.IgnoresDyes || !string.IsNullOrEmpty(spec.Shade))
                         VanillaEdits.Write(Key(recipe, "colour"), recipe, "the stew's own");
                     if (edit.Result != null)
                         VanillaEdits.Write(Key(recipe, "result"), recipe, "none");
@@ -257,10 +260,10 @@ namespace CookingLib
             VanillaRecipeSpec spec = edit.Spec;
             if (edit.HasPages)
                 claims.Add(Claims.Recipe(recipe, "effects", PageText(edit.Extras, edit.Modifiers)));
-            if (spec.Tint.HasValue || spec.IgnoresDyes)
-                claims.Add(Claims.Recipe(recipe, "colour", (spec.Tint.HasValue ? "tint " + Rgba(spec.Tint.Value) : "the stew's own") + (spec.IgnoresDyes ? ", ignores dyes" : "")));
-            if (!string.IsNullOrEmpty(spec.ResultLiquid))
-                claims.Add(Claims.Recipe(recipe, "result", LiquidText(spec.ResultLiquid)));
+            if (spec.Tint.HasValue || spec.IgnoresDyes || !string.IsNullOrEmpty(spec.Shade))
+                claims.Add(Claims.Recipe(recipe, "colour", (spec.Tint.HasValue ? "tint " + Rgba(spec.Tint.Value) : !string.IsNullOrEmpty(spec.Shade) ? "shade " + spec.Shade.Trim() : "the stew's own") + (spec.IgnoresDyes ? ", ignores dyes" : "")));
+            if (!string.IsNullOrEmpty(spec.ResultLiquid) || spec.StageResults != null && spec.StageResults.Count > 0)
+                claims.Add(Claims.Recipe(recipe, "result", ResultText(spec)));
             if (spec.BaseLiquids != null)
                 claims.Add(Claims.Recipe(recipe, "base liquids", string.Join(", ", spec.BaseLiquids.Select(LiquidText).Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray())));
             return claims;
@@ -282,9 +285,13 @@ namespace CookingLib
                 return;
 
             if (!edit.HasPages && !edit.HasWorld)
-                throw new ArgumentException("set at least one of ExtraEffects, EffectModifiers, Tint, IgnoresDyes, ResultLiquid, BaseLiquids");
+                throw new ArgumentException("set at least one of ExtraEffects, EffectModifiers, Tint, Shade, IgnoresDyes, ResultLiquid, StageResults, BaseLiquids");
             if (edit.HasPages && Main.SetupDone)
                 throw new ArgumentException("ExtraEffects and EffectModifiers change journal pages, so set them from Main.Setup");
+            if (!string.IsNullOrEmpty(spec.Shade) && spec.Tint.HasValue)
+                throw new ArgumentException("set Shade or Tint, not both");
+            if (!string.IsNullOrEmpty(spec.Shade))
+                Shades.Need(spec.Shade, "Shade");
             if (spec.Tint.HasValue && !LiquidFactory.IsValidColor(spec.Tint.Value))
                 throw new ArgumentException("tint channels must be 0 to 1");
             if (spec.BaseLiquids != null && (spec.BaseLiquids.Count == 0 || spec.BaseLiquids.Any(string.IsNullOrEmpty)))
@@ -332,6 +339,16 @@ namespace CookingLib
             return ours != null ? ours.Id : liquid.name;
         }
 
+        static string ResultText(VanillaRecipeSpec spec)
+        {
+            List<string> parts = new List<string>();
+            if (!string.IsNullOrEmpty(spec.ResultLiquid))
+                parts.Add(LiquidText(spec.ResultLiquid));
+            foreach (KeyValuePair<StewStage, string> pair in (spec.StageResults ?? new Dictionary<StewStage, string>()).OrderBy(p => p.Key))
+                parts.Add(pair.Key + " " + (string.IsNullOrEmpty(pair.Value) ? "the stew" : LiquidText(pair.Value)));
+            return string.Join(", ", parts.ToArray());
+        }
+
         static string Rgba(Color c) =>
             string.Join(" ", new[] { c.r, c.g, c.b, c.a }.Select(v => v.ToString("0.###", CultureInfo.InvariantCulture)).ToArray());
 
@@ -339,9 +356,11 @@ namespace CookingLib
         {
             internal Color? Tint { get; set; }
 
+            internal Color? Shade { get; set; }
+
             internal bool IgnoresDyes { get; set; }
 
-            internal LiquidRef Result { get; set; }
+            internal StageResults Result { get; set; }
         }
     }
 }

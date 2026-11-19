@@ -19,14 +19,32 @@ namespace CookingLib
         static readonly FieldInfo splashField = typeof(LiquidData).GetField("splashParticlesStrength", PrivateInstance);
         static readonly FieldInfo dataField = typeof(LiquidDefinition).GetField("data", PrivateInstance);
 
-        internal static LiquidData BuildData(LiquidSpec spec, EffectKinds allowed)
+        internal static LiquidData BuildData(LiquidSpec spec, EffectKinds allowed) => BuildData(spec, allowed, null);
+
+        internal static LiquidData BuildData(LiquidSpec spec, EffectKinds allowed, LibLiquid owner)
         {
-            LiquidVisualData look = Names.Need<LiquidVisualData>(spec.Look, "liquid look", "Liquid looks");
+            LiquidVisualData look;
+            Color tint = spec.Color;
+            if (string.IsNullOrEmpty(spec.Shade))
+                look = Names.Need<LiquidVisualData>(spec.Look, "liquid look", "Liquid looks");
+            else
+            {
+                Color want = Shades.Need(spec.Shade, "Shade");
+                look = string.IsNullOrEmpty(spec.Look) ? Shades.Pick(want) : Names.Need<LiquidVisualData>(spec.Look, "liquid look", "Liquid looks");
+                List<string> clamped = new List<string>();
+                tint = Shades.Divide(want, look.LiquidColor, clamped);
+                if (owner != null)
+                {
+                    owner.Shade = want;
+                    owner.ShadeNote = "shade " + Shades.Text(want) + " on " + look.name + (string.IsNullOrEmpty(spec.Look) ? " (picked)" : "") + ", players see " + Shades.Text(Shades.Times(tint, look.LiquidColor))
+                        + (clamped.Count == 0 ? "" : ", " + string.Join(", ", clamped.ToArray()));
+                }
+            }
 
             List<EffectDefinitionApplication> effects = new List<EffectDefinitionApplication>();
             foreach (EffectSpec effect in spec.Effects)
             {
-                EffectDefinition definition = EffectNames.Need(effect.Effect, allowed);
+                EffectDefinition definition = EffectNames.Need(effect, allowed);
                 effects.Add(new EffectDefinitionApplication(definition, effect.Strength, EffectSpread.Check(effect, definition)));
             }
 
@@ -34,7 +52,7 @@ namespace CookingLib
             foreach (string chunk in spec.Chunks)
                 chunks.Add(Names.Need<LiquidVisualChunkDefinition>(chunk, "chunk", "Chunks"));
 
-            LiquidData data = new LiquidData(look, effects.ToArray(), new CookableItem[0], chunks.ToArray(), spec.Color);
+            LiquidData data = new LiquidData(look, effects.ToArray(), new CookableItem[0], chunks.ToArray(), tint);
             skinField.SetValue(data, spec.ConsumableThroughSkin);
             splashField.SetValue(data, spec.SplashStrength);
             return data;

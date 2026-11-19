@@ -32,6 +32,12 @@ namespace CookingLib.Tests
             Run("stew specs", StewSpecTests);
             Run("garnish specs", GarnishSpecTests);
             Run("vanilla edits", OriginalTests);
+            Run("effect numbers", EffectNumberTests);
+            Run("effect specs", EffectSpecTests);
+            Run("shades", ShadeTests);
+            Run("stage results", StageResultTests);
+            Run("cookable specs", CookableSpecTests);
+            Run("edible bites", EdibleBiteTests);
 
             Console.WriteLine(passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;
@@ -287,7 +293,7 @@ namespace CookingLib.Tests
             Same("spec is null", VanillaStews.Modify(null).Error, "a null spec is refused");
             Same("id must look like author.thing", VanillaStews.Modify(new StewSpec { Id = "stew", Stew = "Non Recipe Raw Stew", Extras = 1f }).Error, "an id without a dot is refused");
             Same("Stew is empty", VanillaStews.Modify(new StewSpec { Id = "t.stew", Ingredients = 1f }).Error, "an empty stew name is refused");
-            Same("set at least one of Ingredients, BaseLiquid, Extras, Tint", VanillaStews.Modify(new StewSpec { Id = "t.stew", Stew = "Non Recipe Raw Stew" }).Error, "an empty spec is refused");
+            Same("set at least one of Ingredients, BaseLiquid, Extras, Tint, Shade", VanillaStews.Modify(new StewSpec { Id = "t.stew", Stew = "Non Recipe Raw Stew" }).Error, "an empty spec is refused");
             Same("Ingredients must be 0 to 10", VanillaStews.Modify(new StewSpec { Id = "t.stew", Stew = "Non Recipe Raw Stew", Ingredients = 11f }).Error, "11 is refused");
             Same("BaseLiquid must be 0 to 10", VanillaStews.Modify(new StewSpec { Id = "t.stew", Stew = "Non Recipe Raw Stew", BaseLiquid = -1f }).Error, "minus 1 is refused");
             Same("Extras must be 0 to 10", VanillaStews.Modify(new StewSpec { Id = "t.stew", Stew = "Non Recipe Raw Stew", Extras = float.NaN }).Error, "NaN is refused");
@@ -303,6 +309,76 @@ namespace CookingLib.Tests
             Same(false, VanillaStews.Revert("t.stew"), "revert twice");
             Same(true, VanillaStews.Revert("t.tint"), "revert the tint");
             Same(0, VanillaStews.All.Count(e => e.Error == null), "nothing left live");
+        }
+
+        static void EffectNumberTests()
+        {
+            Type effects = typeof(Effects);
+            uint ember = (uint)Call(effects, "ServerNumber", "example.ember");
+            Same(0u, ember % 65536, "a server only number is a multiple of 65536");
+            Same(ember, Call(effects, "ServerNumber", "Example.Ember"), "ids ignore case");
+            Same(false, ember == (uint)Call(effects, "ServerNumber", "example.zap"), "two ids differ");
+
+            int outside = 0;
+            for (int i = 0; i < 20000; i++)
+            {
+                uint number = (uint)Call(effects, "ServerNumber", "range.test" + i);
+                if (number % 65536 != 0 || number < 65536 || number > 0x7FFFFFFF)
+                    outside++;
+            }
+            Same(0, outside, "every number is k x 65536, at least 65536 and below 2^31, so it reaches players as 0");
+        }
+
+        static void EffectSpecTests()
+        {
+            Same("spec is null", Effects.RegisterServerOnly(null).Error, "a null spec is refused");
+            Same("register effects from Main.PreSetup, before liquids and pages are built", Effects.RegisterServerOnly(new CustomEffectSpec { Id = "t.fx", Template = "Speed" }).Error, "outside PreSetup is refused");
+            Same(null, Effects.Get("t.fx"), "a refused effect is not found");
+            Same(2, Effects.All.Count, "refused ones are listed");
+            Same("Seconds must be 1 to 86400", Try(() => Call(T("EffectFactory"), "CheckSeconds", 0)), "0 seconds is refused");
+            Same(null, Try(() => Call(T("EffectFactory"), "CheckSeconds", 86400)), "a day is allowed");
+        }
+
+        static void ShadeTests()
+        {
+            Type shades = T("Shades");
+            var lost = new List<string>();
+            var tint = (UnityEngine.Color)Call(shades, "Divide", new UnityEngine.Color(0.5f, 0.2f, 0f, 1f), new UnityEngine.Color(1f, 0.4f, 0.8f, 1f), lost);
+            Same("0.5 0.5 0", tint.r + " " + tint.g + " " + tint.b, "the tint is the wanted colour over the look");
+            Same(0, lost.Count, "nothing clamps inside the look");
+
+            tint = (UnityEngine.Color)Call(shades, "Divide", new UnityEngine.Color(1f, 0f, 0.5f, 1f), new UnityEngine.Color(0f, 0.322f, 0.25f, 1f), lost);
+            Same("1 0 1", tint.r + " " + tint.g + " " + tint.b, "red on a look with none, and blue past the look, clamp at 1");
+            Same("red lost, the look has none; blue capped at 0.25 by the look", string.Join("; ", lost.ToArray()), "both are reported");
+
+            float onGrey = (float)Call(shades, "Loss", new UnityEngine.Color(0.7f, 0.1f, 0.1f, 1f), new UnityEngine.Color(0.749f, 0.749f, 0.749f, 1f));
+            float onWater = (float)Call(shades, "Loss", new UnityEngine.Color(0.7f, 0.1f, 0.1f, 1f), new UnityEngine.Color(0f, 0.322f, 0.588f, 1f));
+            Same(true, onGrey < onWater, "a red shade loses less on grey than on water");
+        }
+
+        static void StageResultTests()
+        {
+            Type results = T("StageResults");
+            Same(null, Call(results, "Resolve", null, new Dictionary<StewStage, string>()), "nothing set gives no results");
+            Same("StageResults takes Raw, Cooked and Burnt, not BurntAway", Try(() => Call(results, "Resolve", null, new Dictionary<StewStage, string> { { StewStage.BurntAway, "" } })), "BurntAway is refused");
+            object keep = Call(results, "Resolve", null, new Dictionary<StewStage, string> { { StewStage.Cooked, "" } });
+            Same(true, Get(keep, "Varies"), "an empty string keeps the stew at that stage");
+            Same("Cooked the stew", keep.GetType().GetMethod("Text", Any).Invoke(keep, null), "the text names it");
+        }
+
+        static void CookableSpecTests()
+        {
+            Same("spec is null", Cookables.Register(null).Error, "a null spec is refused");
+            Same("id must look like author.thing", Cookables.Register(new CookableSpec { Id = "ore", Item = "Iron Ore" }).Error, "an id without a dot is refused");
+            Same("Item is empty", Cookables.Register(new CookableSpec { Id = "t.ore" }).Error, "an empty item is refused");
+            Same(true, Cookables.All.All(c => c.IsCookable), "every entry says it is a cookable");
+        }
+
+        static void EdibleBiteTests()
+        {
+            Same("Bites must be 1 to 20, or 0 to copy LikeFood", Edibles.Register(new EdibleSpec { Id = "t.bite", Item = "Woodcut Wedge", Bites = 21 }).Error, "21 bites are refused");
+            Same("BiteSeconds must be 0.05 to 10, or 0 to copy LikeFood", Edibles.Register(new EdibleSpec { Id = "t.bite", Item = "Woodcut Wedge", BiteSeconds = 0.01f }).Error, "a bite too short is refused");
+            Same("all bites together must take at most 10 seconds", Edibles.Register(new EdibleSpec { Id = "t.bite", Item = "Woodcut Wedge", Bites = 10, BiteSeconds = 2f }).Error, "20 seconds of bites are refused");
         }
 
         static void GarnishSpecTests()

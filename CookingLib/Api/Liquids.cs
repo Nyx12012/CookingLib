@@ -115,7 +115,7 @@ namespace CookingLib
             try
             {
                 Validate(spec);
-                LiquidData data = LiquidFactory.BuildData(spec, shared ? EffectNames.ForShared : EffectNames.ForServer);
+                LiquidData data = LiquidFactory.BuildData(spec, shared ? EffectNames.ForShared : EffectNames.ForServer, liquid);
                 string fingerprint = LiquidFactory.Fingerprint(data);
                 LiquidDefinition definition;
                 if (shared)
@@ -162,6 +162,8 @@ namespace CookingLib
                 throw new ArgumentException("Effects and Chunks can't be null or hold a null effect");
             if (!LiquidFactory.IsValidColor(spec.Color))
                 throw new ArgumentException("colour channels must be 0 to 1");
+            if (!string.IsNullOrEmpty(spec.Shade) && spec.Color != UnityEngine.Color.white)
+                throw new ArgumentException("set Shade or Color, not both");
 
             foreach (EffectSpec effect in spec.Effects)
             {

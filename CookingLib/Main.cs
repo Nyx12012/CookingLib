@@ -10,7 +10,7 @@ namespace CookingLib
 {
     public class Main : MelonMod
     {
-        public const string Version = "0.2.1";
+        public const string Version = "0.3.0";
 
         public static event Action PreSetup;
         public static event Action Setup;
@@ -20,7 +20,11 @@ namespace CookingLib
 
         internal static bool SetupDone { get; private set; }
 
+        internal static bool InPreSetup { get; private set; }
+
         static bool worldUp;
+
+        internal static bool WorldIsUp => worldUp;
 
         public override void OnInitializeMelon()
         {
@@ -36,10 +40,13 @@ namespace CookingLib
         public override void OnLateInitializeMelon()
         {
             Safe.Run("game effects snapshot", EffectNames.TakeGameSnapshot);
+            InPreSetup = true;
             EventQueue.Fire(PreSetup, nameof(PreSetup));
+            InPreSetup = false;
             EventQueue.Fire(Setup, nameof(Setup));
             EventQueue.Fire(PostSetup, nameof(PostSetup));
             SetupDone = true;
+            Safe.Run("effects", () => Effects.AfterPostSetup(HarmonyInstance));
             Safe.Run("vanilla liquids", VanillaLiquids.ApplyAll);
             Safe.Run("food walk", Edibles.AfterSetup);
         }
@@ -47,7 +54,10 @@ namespace CookingLib
         public override void OnUpdate()
         {
             EventQueue.Drain();
+            Effects.DrainHits();
             WorldUp();
+            if (worldUp)
+                CookablePots.Tick(Time.deltaTime);
         }
 
         internal static void WorldUp()
@@ -65,6 +75,7 @@ namespace CookingLib
             VanillaStews.ApplyAll();
             Safe.Run("food sweep", Edibles.WorldUp);
             Infusions.ResolveAll();
+            Safe.Run("cookables", Cookables.WorldUp);
             Safe.Run("roasting", Roasting.ResolveAll);
             Reachability.Check();
             CookingLibCommands.Register();

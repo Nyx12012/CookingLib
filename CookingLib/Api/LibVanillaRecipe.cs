@@ -40,12 +40,12 @@ namespace CookingLib
 
         internal bool WorldApplied { get; set; }
 
-        internal LiquidRef Result { get; set; }
+        internal StageResults Result { get; set; }
 
         internal List<LiquidDefinition> Bases { get; set; }
 
         internal bool HasPages => !IsDisable && Spec != null && (Spec.ExtraEffects != null || Spec.EffectModifiers != null);
 
-        internal bool HasWorld => IsDisable || Spec != null && (Spec.Tint.HasValue || Spec.IgnoresDyes || !string.IsNullOrEmpty(Spec.ResultLiquid) || Spec.BaseLiquids != null);
+        internal bool HasWorld => IsDisable || Spec != null && (Spec.Tint.HasValue || !string.IsNullOrEmpty(Spec.Shade) || Spec.IgnoresDyes || !string.IsNullOrEmpty(Spec.ResultLiquid) || Spec.StageResults != null && Spec.StageResults.Count > 0 || Spec.BaseLiquids != null);
     }
 }

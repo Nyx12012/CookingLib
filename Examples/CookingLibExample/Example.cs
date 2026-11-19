@@ -9,7 +9,7 @@ using CookingLib;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(CookingLibExample.Example), "CookingLibExample", "0.2.1", "Shadow")]
+[assembly: MelonInfo(typeof(CookingLibExample.Example), "CookingLibExample", "0.3.0", "Shadow")]
 [assembly: MelonGame("Alta", "A Township Tale")]
 
 namespace CookingLibExample
@@ -23,6 +23,7 @@ namespace CookingLibExample
         {
             log = LoggerInstance;
             ProbeSwitches.Init();
+            CookingLib.Main.PreSetup += PreSetup;
             CookingLib.Main.Setup += Setup;
             StewEvents.Made += args => LogStew("made", args);
             StewEvents.StageChanged += args => LogStew("stage changed", args);
@@ -42,8 +43,51 @@ namespace CookingLibExample
             CommandService.CommandCollection.ProcessModule(typeof(ProbeSwitches), typeof(ProbeSwitches).Assembly, null);
         }
 
+        static void PreSetup()
+        {
+            if (!ProbeSwitches.EffectsAtBoot)
+                return;
+
+            Effects.RegisterServerOnly(new CustomEffectSpec
+            {
+                Id = "example.ember",
+                Template = "Damage Indirect effect",
+                Seconds = 300
+            });
+
+            Effects.RegisterServerOnly(new CustomEffectSpec
+            {
+                Id = "example.zap",
+                Handler = hit => log.Msg("zap: " + (hit.UserName ?? "a creature") + " " + hit.UserId + ", strength " + hit.Strength.ToString("0.00", CultureInfo.InvariantCulture) + ", hits " + hit.Hits)
+            });
+
+            Effects.RegisterShared(50001, new CustomEffectSpec
+            {
+                Id = "example.chime",
+                Handler = hit => log.Msg("chime: " + (hit.UserName ?? "a creature") + ", strength " + hit.Strength.ToString("0.00", CultureInfo.InvariantCulture)),
+                Glyph = "Glyph_SpeedIcon"
+            });
+        }
+
         static void Setup()
         {
+            if (ProbeSwitches.EffectsAtBoot)
+            {
+                Liquids.RegisterServerOnly(new LiquidSpec
+                {
+                    Id = "example.emberwater",
+                    Name = "Ember Water",
+                    Look = "Default Stew Raw Liquid Visual Data",
+                    Color = new Color(0.9f, 0.35f, 0.1f),
+                    Effects =
+                    {
+                        new EffectSpec { Effect = "example.ember", Strength = 0.5f },
+                        new EffectSpec { Effect = "example.zap", Strength = 1f },
+                        new EffectSpec { Effect = "Speed", Strength = 1f, Seconds = 60 }
+                    }
+                });
+            }
+
             Liquids.RegisterServerOnly(new LiquidSpec
             {
                 Id = "example.ashwater",
@@ -208,6 +252,70 @@ namespace CookingLibExample
                     new EffectSpec { Effect = "Nourish", Strength = 0.2f },
                     new EffectSpec { Effect = "Speed", Strength = 0.3f }
                 }
+            });
+
+            Edibles.Register(new EdibleSpec
+            {
+                Id = "example.wedgesnack",
+                Item = "Woodcut Wedge",
+                Effects = new List<EffectSpec>
+                {
+                    new EffectSpec { Effect = "Feed", Strength = 1f },
+                    new EffectSpec { Effect = ProbeSwitches.EffectsAtBoot ? "example.ember" : "Damage", Strength = 0.5f }
+                },
+                Bites = 3,
+                BiteSeconds = 0.6f
+            });
+
+            Edibles.Register(new EdibleSpec
+            {
+                Id = "example.applesnack",
+                Item = "Apple Full Ripe",
+                Effects = new List<EffectSpec> { new EffectSpec { Effect = "Heal", Strength = 0.5f } }
+            });
+
+            Cookables.Register(new CookableSpec
+            {
+                Id = "example.ironore",
+                Item = "Iron Ore",
+                Effects = new List<EffectSpec> { new EffectSpec { Effect = ProbeSwitches.EffectsAtBoot ? "example.ember" : "Damage", Strength = 0.5f } },
+                Chunk = "MushroomBrown Burnt Chunk Visual",
+                SoakSeconds = 2f
+            });
+
+            Cookables.Register(new CookableSpec
+            {
+                Id = "example.oakwedge",
+                Item = "Woodcut Wedge",
+                Effects = new List<EffectSpec> { new EffectSpec { Effect = "Speed Indirect Effect", Strength = 0.3f } },
+                Chunk = "MushroomBrown Burnt Chunk Visual",
+                Materials = ProbeSwitches.WedgeMaterials(),
+                SoakSeconds = 2f
+            });
+
+            StewRecipes.Register(new StewRecipeSpec
+            {
+                Id = "example.orestew",
+                Look = "Vegetable Ragu",
+                Slots =
+                {
+                    new SlotSpec { Items = { "Iron Ore" } },
+                    new SlotSpec { Items = { "Iron Ore" } },
+                    new SlotSpec { Items = { "Carrot Full Ripe" } },
+                    new SlotSpec { Category = "Vegetables Category" }
+                },
+                ExtraEffects = { new EffectSpec { Effect = ProbeSwitches.EffectsAtBoot ? "example.zap" : "Heal", Strength = 1f } },
+                Shade = "#8A5A2B",
+                StageResults = { { StewStage.Burnt, "example.ashwater" } }
+            });
+
+            Liquids.RegisterServerOnly(new LiquidSpec
+            {
+                Id = "example.tealdye",
+                Name = "Teal Dye",
+                Shade = "teal",
+                ColorsStews = true,
+                CountsAsWater = true
             });
 
             VanillaLiquids.Modify(new VanillaLiquidSpec

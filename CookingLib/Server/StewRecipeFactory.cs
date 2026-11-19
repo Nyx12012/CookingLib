@@ -26,7 +26,7 @@ namespace CookingLib
 
         internal static void Build(LibStewRecipe lib)
         {
-            Resolve(lib.Spec, out uint look, out List<LiquidDefinition> liquids, out LiquidRef result);
+            Resolve(lib.Spec, out uint look, out List<LiquidDefinition> liquids, out StageResults result);
             StewRecipe recipe = Create(lib.Spec, Registry.NumberFor(lib.Spec.Id));
             if (!Registry.Add(recipe))
                 throw new ArgumentException("recipe number " + recipe.Hash + " is taken, pick another id");
@@ -43,28 +43,29 @@ namespace CookingLib
 
         internal static void Cook(LibStewRecipe lib)
         {
-            Resolve(lib.Spec, out uint look, out List<LiquidDefinition> liquids, out LiquidRef result);
+            Resolve(lib.Spec, out uint look, out List<LiquidDefinition> liquids, out StageResults result);
             Write(lib, lib.Recipe, look, liquids, result);
         }
 
         internal static List<int> BlankSlots(StewRecipe recipe) =>
             Enumerable.Range(0, recipe.StewIngredients.Count).Where(i => recipe.StewIngredients[i] == null || recipe.StewIngredients[i].glyph == null).Select(i => i + 1).ToList();
 
-        static void Resolve(StewRecipeSpec spec, out uint look, out List<LiquidDefinition> liquids, out LiquidRef result)
+        static void Resolve(StewRecipeSpec spec, out uint look, out List<LiquidDefinition> liquids, out StageResults result)
         {
             look = Look(spec.Look);
             liquids = spec.BaseLiquids.Select(name => LiquidRef.Resolve(name).Definition).ToList();
             if (liquids.Any(liquid => liquid == null))
                 throw new ArgumentException("a base liquid has no definition");
-            result = string.IsNullOrEmpty(spec.ResultLiquid) ? null : LiquidRef.Resolve(spec.ResultLiquid);
+            result = StageResults.Resolve(spec.ResultLiquid, spec.StageResults);
         }
 
-        static void Write(LibStewRecipe lib, StewRecipe recipe, uint look, List<LiquidDefinition> liquids, LiquidRef result)
+        static void Write(LibStewRecipe lib, StewRecipe recipe, uint look, List<LiquidDefinition> liquids, StageResults result)
         {
             lookField.SetValue(recipe, look);
             liquidsField.SetValue(recipe, liquids);
             lib.Recipe = recipe;
             lib.Result = result;
+            lib.Shade = string.IsNullOrEmpty(lib.Spec.Shade) ? null : Colors.Parse(lib.Spec.Shade);
         }
 
         static StewRecipe Create(StewRecipeSpec spec, uint number)
@@ -112,7 +113,7 @@ namespace CookingLib
 
         static void AddOnce(List<EffectDefinitionApplication> list, EffectSpec effect, string kind)
         {
-            EffectDefinition definition = EffectNames.Need(effect.Effect, EffectNames.ForServer);
+            EffectDefinition definition = EffectNames.Need(effect, EffectNames.ForServer);
             if (list.Any(existing => existing.EffectToModify == definition))
                 throw new ArgumentException(kind + " " + definition.name + " is listed twice");
             list.Add(new EffectDefinitionApplication(definition, effect.Strength));

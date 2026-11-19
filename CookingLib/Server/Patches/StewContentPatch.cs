@@ -17,9 +17,11 @@ namespace CookingLib
                 postfix: new HarmonyMethod(typeof(StewContentPatch), nameof(Postfix)));
         }
 
-        internal static LiquidRef ResultOf(StewRecipe recipe) => StewRecipes.Find(recipe)?.Result ?? VanillaRecipes.OverrideOf(recipe)?.Result;
+        internal static StageResults ResultsOf(StewRecipe recipe) => StewRecipes.Find(recipe)?.Result ?? VanillaRecipes.OverrideOf(recipe)?.Result;
 
-        static void Prefix(StewManager __instance, StewRecipe ___currentRecipe, ref Color colorTint, out bool __state)
+        internal static LiquidRef ResultOf(StewRecipe recipe, StewComponent stew) => ResultsOf(recipe)?.For(stew);
+
+        static void Prefix(StewManager __instance, StewRecipe ___currentRecipe, StewComponent ___stew, ref Color colorTint, out bool __state)
         {
             __state = false;
             try
@@ -27,15 +29,18 @@ namespace CookingLib
                 LibStewRecipe ours = StewRecipes.Find(___currentRecipe);
                 VanillaRecipes.Override edit = ours == null ? VanillaRecipes.OverrideOf(___currentRecipe) : null;
                 Color? tint = ours != null ? ours.Spec.Tint : edit?.Tint;
+                Color? shade = ours != null ? ours.Shade : edit?.Shade;
                 if (tint.HasValue)
                     colorTint = tint.Value;
-                if (ours != null && ours.Spec.IgnoresDyes || edit != null && edit.IgnoresDyes || ResultOf(___currentRecipe) != null)
+                else if (shade.HasValue)
+                    colorTint = Shades.OnStage(shade.Value, ___stew);
+                if (ours != null && ours.Spec.IgnoresDyes || edit != null && edit.IgnoresDyes || ResultOf(___currentRecipe, ___stew) != null)
                     return;
 
                 LibLiquid dye = Liquids.FindByDefinition(__instance.StewLiquidBase);
                 if (dye != null && dye.Spec.ColorsStews)
                 {
-                    colorTint = dye.Data.ColorTint;
+                    colorTint = dye.Shade.HasValue ? Shades.OnStage(dye.Shade.Value, ___stew) : dye.Data.ColorTint;
                     __state = true;
                 }
             }
@@ -49,7 +54,7 @@ namespace CookingLib
         {
             try
             {
-                LiquidRef result = ResultOf(___currentRecipe);
+                LiquidRef result = ResultOf(___currentRecipe, ___stew);
                 if (result != null)
                 {
                     __result = result.CreateContent();

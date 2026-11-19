@@ -217,7 +217,7 @@ namespace CookingLib
             List<EffectDefinitionApplication> effects = new List<EffectDefinitionApplication>();
             foreach (EffectSpec effect in spec.GlobalEffects)
             {
-                EffectDefinition definition = EffectNames.Need(effect.Effect, EffectKinds.Game);
+                EffectDefinition definition = EffectNames.Need(effect, EffectNames.ForServer);
                 if (effects.Any(existing => existing.EffectToModify == definition))
                     throw new ArgumentException("GlobalEffects lists " + definition.name + " twice");
                 effects.Add(new EffectDefinitionApplication(definition, effect.Strength));

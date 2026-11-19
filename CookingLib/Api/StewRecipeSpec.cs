@@ -27,10 +27,16 @@ namespace CookingLib
         /// <summary>Optional colour in place of the borrowed stew's own. Every channel from 0 to 1.</summary>
         public Color? Tint;
 
+        /// <summary>The colour players should see at every stage, as #RRGGBB or a name. CookingLib works out the tint for each stage's look, so the stew keeps one colour from Raw to Burnt as far as each look allows. Use it or Tint, not both.</summary>
+        public string Shade;
+
         /// <summary>True keeps this recipe's own colour on a base liquid that sets ColorsStews.</summary>
         public bool IgnoresDyes;
 
         /// <summary>Optional registered id or vanilla liquid name the pot holds instead of the stew.</summary>
         public string ResultLiquid;
+
+        /// <summary>A result per stage, overriding ResultLiquid at that stage: Raw, Cooked or Burnt to a registered id or game liquid name, or to an empty string to keep the stew at that stage.</summary>
+        public Dictionary<StewStage, string> StageResults = new Dictionary<StewStage, string>();
     }
 }

@@ -22,5 +22,8 @@ namespace CookingLib
 
         /// <summary>The stew's colour, every channel 0 to 1. A recipe Tint and a liquid that colours stews still win.</summary>
         public Color? Tint;
+
+        /// <summary>The colour players should see for this stew, as #RRGGBB or a name, worked out for its look. Use it or Tint, not both.</summary>
+        public string Shade;
     }
 }

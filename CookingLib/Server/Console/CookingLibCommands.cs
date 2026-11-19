@@ -18,7 +18,7 @@ using UnityEngine;
 
 namespace CookingLib
 {
-    [Module("cookinglib", "CookingLib: status, dump, foods, pots, unlock")]
+    [Module("cookinglib", "CookingLib: status, dump, foods, pots, stats, color, unlock")]
     internal static class CookingLibCommands
     {
         static readonly FieldInfo androidColorField = typeof(LiquidVisualData).GetField("androidLiquidColor", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -28,11 +28,13 @@ namespace CookingLib
         {
             StringBuilder text = new StringBuilder("CookingLib " + Main.Version + "\n");
 
+            Safe.Run("effects status", () => EffectsReport.Status(text));
+
             text.Append("liquids: ").Append(Liquids.All.Count).Append('\n');
             foreach (LibLiquid liquid in Liquids.All)
             {
                 string state = liquid.Error != null ? "refused: " + liquid.Error : liquid.IsShared ? "shared as " + liquid.BaseDefinition.Hash : "server only, pot number " + liquid.BaseDefinition.Hash;
-                text.Append("  ").Append(liquid.Id).Append("  ").Append(state).Append(LiquidFlags(liquid.Spec)).Append(AliasNotes(liquid.Spec?.Effects)).Append('\n');
+                text.Append("  ").Append(liquid.Id).Append("  ").Append(state).Append(LiquidFlags(liquid.Spec)).Append(liquid.ShadeNote == null ? "" : ", " + liquid.ShadeNote).Append(AliasNotes(liquid.Spec?.Effects)).Append('\n');
             }
 
             text.Append("shared recipe pages: ").Append(StewRecipes.SharedPages ? "on" : "off").Append('\n');
@@ -62,6 +64,8 @@ namespace CookingLib
                 string state = infusion.Error != null ? "refused: " + infusion.Error : infusion.IsReady ? "ready" : "waiting for the world";
                 text.Append("  ").Append(infusion.Id).Append("  ").Append(state).Append('\n');
             }
+
+            Safe.Run("cookable status", () => CookableStatus(text));
 
             Safe.Run("roast status", () => RoastReport.Status(text));
 
@@ -127,6 +131,61 @@ namespace CookingLib
             }
         }
 
+        [Command("stats", "A player's stats with their buffs and how long each has left: stats <player>")]
+        public static string Stats(string player = "")
+        {
+            try
+            {
+                return EffectsReport.Stats(player);
+            }
+            catch (Exception e)
+            {
+                Log.Error("stats failed: " + e);
+                return "stats failed: " + e.Message;
+            }
+        }
+
+        [Command("color", "What a colour looks like on the looks a Shade picks from, or on one look: color <#RRGGBB or name> [look]")]
+        public static string ColorCommand(string args = "")
+        {
+            try
+            {
+                return ColorReport(args);
+            }
+            catch (ArgumentException e)
+            {
+                return e.Message;
+            }
+            catch (Exception e)
+            {
+                Log.Error("color failed: " + e);
+                return "color failed: " + e.Message;
+            }
+        }
+
+        static string ColorReport(string args)
+        {
+            string text = (args ?? "").Trim();
+            int space = text.IndexOf(' ');
+            string colour = space < 0 ? text : text.Substring(0, space);
+            string lookName = space < 0 ? null : text.Substring(space + 1).Trim();
+            if (colour.Length == 0)
+                return "color <#RRGGBB or name> [look]";
+            UnityEngine.Color want = Shades.Need(colour, "colour");
+            List<LiquidVisualData> looks = string.IsNullOrEmpty(lookName) ? Shades.CandidateLooks().ToList() : new List<LiquidVisualData> { Names.Need<LiquidVisualData>(lookName, "liquid look", "Liquid looks") };
+            StringBuilder reply = new StringBuilder("wanted ").Append(Shades.Text(want)).Append('\n');
+            foreach (LiquidVisualData look in looks)
+            {
+                List<string> clamped = new List<string>();
+                UnityEngine.Color tint = Shades.Divide(want, look.LiquidColor, clamped);
+                reply.Append(look.name).Append(": tint ").Append(Shades.Text(tint)).Append(", players see ").Append(Shades.Text(Shades.Times(tint, look.LiquidColor)))
+                    .Append(clamped.Count == 0 ? "" : ", " + string.Join(", ", clamped.ToArray())).Append(", rim ").Append(LookField<UnityEngine.Color>(look, "rimColor", Rgba)).Append('\n');
+            }
+            if (string.IsNullOrEmpty(lookName))
+                reply.Append("Shade with no Look picks ").Append(Shades.Pick(want).name);
+            return reply.ToString();
+        }
+
         [Command("unlock", "Unlocks a shared recipe's journal page for everyone in this world: unlock <id>")]
         public static string Unlock(string id = "")
         {
@@ -169,6 +228,7 @@ namespace CookingLib
             Looks(text);
             Section<LiquidVisualChunkDefinition>(text, "Chunks");
             Effects(text);
+            Safe.Run("effects dump", () => EffectsReport.Dump(text));
             Aliases(text);
             Section<StewRecipe>(text, "Stew recipes");
             Section<Glyph>(text, "Glyphs");
@@ -179,6 +239,8 @@ namespace CookingLib
             Safe.Run("roast dump", () => RoastReport.Dump(text));
             DrinkNames(text);
             EndlessSources(text);
+            Safe.Run("cookable dump", () => CookableDump(text));
+            Section<PhysicalMaterial>(text, "Physical materials");
 
             text.Append("== Cookable categories ==\n");
             foreach (CookableCategoryDefinition category in Names.Categories())
@@ -227,13 +289,35 @@ namespace CookingLib
 
         static void Looks(StringBuilder text)
         {
-            text.Append("== Liquid looks (main colour, then Android colour) ==\n");
+            text.Append("== Liquid looks (main colour, Android colour, depth colour, rim colour, transparency, use) ==\n");
             foreach (LiquidVisualData look in HashedGeneralValue<LiquidVisualData>.All.Where(v => v != null).OrderBy(v => v.name, StringComparer.OrdinalIgnoreCase))
             {
                 string android = androidColorField == null ? "?" : Rgba((Color)androidColorField.GetValue(look));
-                text.Append(look.name).Append("  ").Append(look.Hash).Append("  ").Append(Rgba(look.LiquidColor)).Append("  ").Append(android).Append('\n');
+                text.Append(look.name).Append("  ").Append(look.Hash).Append("  ").Append(Rgba(look.LiquidColor)).Append("  ").Append(android)
+                    .Append("  depth ").Append(LookField<Color>(look, "liquidDepthColor", Rgba)).Append("  rim ").Append(LookField<Color>(look, "rimColor", Rgba))
+                    .Append("  transparency ").Append(LookField<float>(look, "transparency", v => Claims.Number(v))).Append("  ").Append(LookUse(look.name))
+                    .Append(Shades.Candidates.Contains(look.Hash) ? "  Shade picks from it" : "").Append('\n');
             }
+            text.Append("\nGame liquids as players see them (tint times look):\n");
+            foreach (LiquidDefinition liquid in Liquids.GameLiquids().Where(l => l.Data != null && l.Data.LiquidVisual != null).OrderBy(l => l.name, StringComparer.OrdinalIgnoreCase))
+                text.Append(liquid.name).Append("  tint ").Append(Rgba(liquid.Data.ColorTint)).Append("  on ").Append(liquid.Data.LiquidVisual.name).Append("  shows ").Append(Shades.Text(liquid.Data.TintedLiquidColor)).Append('\n');
             text.Append('\n');
+        }
+
+        static string LookField<T>(LiquidVisualData look, string name, Func<T, string> show)
+        {
+            FieldInfo field = typeof(LiquidVisualData).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
+            return field == null ? "?" : show((T)field.GetValue(look));
+        }
+
+        static string LookUse(string name)
+        {
+            string n = name.ToLowerInvariant();
+            if (n.Contains("water") || n.Contains("teleport"))
+                return "potion";
+            if (n.Contains("glowing"))
+                return "glow";
+            return n.Contains("burnt") ? "stew burnt" : n.Contains("cooked") ? "stew cooked" : n.Contains("raw") ? "stew raw" : "other";
         }
 
         static void Aliases(StringBuilder text)
@@ -339,6 +423,56 @@ namespace CookingLib
                 return "";
             List<string> notes = effects.Where(e => e != null).Select(e => EffectNames.AliasNote(e.Effect)).Where(n => n != null).Distinct().ToList();
             return notes.Count == 0 ? "" : "  aliases: " + string.Join(", ", notes.ToArray());
+        }
+
+        static void CookableDump(StringBuilder text)
+        {
+            text.Append("== Cookables (item, prefab, root pickup, bodies, sub docks, crafting part, colliders, material) ==\n");
+            foreach (LibIngredient cookable in Cookables.All.Where(c => c.Item != null))
+            {
+                NetworkPrefab prefab = cookable.Item.Prefab;
+                Pickup pickup = prefab == null ? null : prefab.GetComponent<Pickup>();
+                PhysicalMaterialPart part = prefab == null ? null : prefab.GetComponentInChildren<PhysicalMaterialPart>(true);
+                text.Append(cookable.Id).Append("  ").Append(cookable.Item.name).Append("  ").Append(prefab == null ? "no prefab" : prefab.name + " " + prefab.Hash)
+                    .Append("  pickup ").Append(pickup == null ? "no" : pickup.GetType().Name)
+                    .Append("  rigidbody ").Append(prefab != null && prefab.GetComponent<Rigidbody>() != null ? "yes" : "no")
+                    .Append("  network body ").Append(prefab != null && prefab.GetComponent<NetworkRigidbody>() != null ? "yes" : "no")
+                    .Append("  sub docks ").Append(pickup == null || pickup.SubDocks == null ? 0 : pickup.SubDocks.Docks.Count())
+                    .Append("  crafting part ").Append(pickup == null || pickup.CraftingPart == null ? "none" : pickup.CraftingPart.name)
+                    .Append("  colliders ").Append(prefab == null ? 0 : prefab.GetComponentsInChildren<Collider>(true).Count(c => !c.isTrigger))
+                    .Append("  material ").Append(part == null || part.PhysicalMaterial == null ? "none" : part.PhysicalMaterial.name)
+                    .Append(cookable.Error == null ? "" : "  refused: " + cookable.Error).Append('\n');
+            }
+            text.Append('\n');
+        }
+
+        static void CookableStatus(StringBuilder text)
+        {
+            if (Cookables.Error != null)
+            {
+                text.Append("cookables: off, ").Append(Cookables.Error).Append('\n');
+                return;
+            }
+            text.Append("cookables: ").Append(Cookables.Live.Count()).Append(" ready; ").Append(CookablePots.Converted).Append(" stewed, ").Append(CookablePots.PushedOut)
+                .Append(" pushed out, ").Append(CookablePots.Failed).Append(" failed; loads ").Append(CookablePatches.Restored).Append(" restored, ").Append(CookablePatches.Dropped)
+                .Append(" dropped; ").Append(CookablePatches.PagesSkipped).Append(" page unlocks skipped; ").Append(CookablePots.PotsWithCookables).Append(" pots hold cookables\n");
+            foreach (LibIngredient cookable in Cookables.All)
+            {
+                text.Append("  ").Append(cookable.Id).Append("  ");
+                if (cookable.Error != null)
+                {
+                    text.Append("refused: ").Append(cookable.Error).Append('\n');
+                    continue;
+                }
+                CookableSpec spec = (CookableSpec)cookable.Spec;
+                text.Append(cookable.Item.name).Append(", soak ").Append(Claims.Number(spec.SoakSeconds)).Append(" s, ").Append(VanillaEdits.Text(cookable.Effects))
+                    .Append(cookable.Chunk == null ? "" : ", chunk " + cookable.Chunk.name).Append(cookable.Category == null ? "" : ", category " + cookable.Category.name)
+                    .Append(cookable.Materials == null ? "" : ", only " + string.Join(", ", cookable.Materials.Select(m => m.name).ToArray()))
+                    .Append("; stewed ").Append(cookable.Converted).Append(", pushed out ").Append(cookable.PushedOut);
+                foreach (string note in cookable.Warnings)
+                    text.Append("; ").Append(note);
+                text.Append('\n');
+            }
         }
 
         static string Rgba(Color c) =>

@@ -6,7 +6,12 @@ namespace CookingLib
 {
     internal static class SlotItems
     {
-        internal static CookableItem Resolve(string name) => NeedVanilla(Names.NeedItem(name));
+        internal static CookableItem Resolve(string name)
+        {
+            Item item = Names.NeedItem(name);
+            LibIngredient cookable = Cookables.ForItem(item);
+            return cookable != null ? cookable.Cookable : NeedVanilla(item);
+        }
 
         internal static CookableItem OnPage(Item item)
         {

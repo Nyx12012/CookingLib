@@ -93,7 +93,7 @@ namespace CookingLib
             {
                 if (!LiquidFactory.IsWithin100(spec.Strength))
                     throw new ArgumentException("effect strengths must be minus 100 to 100");
-                EffectDefinition definition = EffectNames.Need(spec.Effect, EffectKinds.Game);
+                EffectDefinition definition = EffectNames.Need(spec, EffectNames.ForServer);
                 if (effects.Any(e => e.EffectToModify == definition))
                     throw new ArgumentException(field + " lists " + definition.name + " twice");
                 effects.Add(new EffectDefinitionApplication(definition, spec.Strength));
@@ -114,7 +114,7 @@ namespace CookingLib
             {
                 if (!IsMultiplier(spec.Strength))
                     throw new ArgumentException(field + " must be 0 to 10");
-                EffectDefinition definition = EffectNames.Need(spec.Effect, EffectKinds.Game);
+                EffectDefinition definition = EffectNames.Need(spec, EffectNames.ForServer);
                 if (effects.Any(e => e.EffectToModify == definition))
                     throw new ArgumentException(field + " lists " + definition.name + " twice");
                 effects.Add(new EffectDefinitionApplication(definition, spec.Strength));
@@ -136,7 +136,7 @@ namespace CookingLib
             {
                 if (!LiquidFactory.IsWithin100(spec.Strength))
                     throw new ArgumentException("effect strengths must be minus 100 to 100");
-                EffectDefinition definition = EffectNames.Need(spec.Effect, EffectKinds.Game);
+                EffectDefinition definition = EffectNames.Need(spec, EffectNames.ForServer);
                 if (IsFullness(definition))
                     throw new ArgumentException(definition.name + " changes fullness, which stays the game's on " + what + " because vanilla players judge fullness with their own copy. Raise Nourish instead");
                 if (effects.Any(e => e.EffectToModify == definition))

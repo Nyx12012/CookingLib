@@ -12,11 +12,14 @@ namespace CookingLib
         /// <summary>Display name for logs and the dump. Falls back to the id.</summary>
         public string Name;
 
-        /// <summary>A vanilla liquid look, copied from the dump.</summary>
+        /// <summary>A vanilla liquid look, copied from the dump. May be empty when Shade is set.</summary>
         public string Look;
 
         /// <summary>Tint over the look. Every channel from 0 to 1.</summary>
         public Color Color = Color.white;
+
+        /// <summary>The colour players should see, as #RRGGBB or a name such as orange. CookingLib works out the tint for the look, and picks a look when Look is empty. Use it or Color, not both.</summary>
+        public string Shade;
 
         /// <summary>Effects a drinker gets.</summary>
         public List<EffectSpec> Effects = new List<EffectSpec>();

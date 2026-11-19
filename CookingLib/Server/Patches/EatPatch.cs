@@ -20,6 +20,9 @@ namespace CookingLib
                 postfix: new HarmonyMethod(typeof(EatPatch), nameof(EffectsPostfix)));
         }
 
+        internal static EdibleObject Eating(ConsumptionManager consumer, IEnumerable<EffectDefinitionApplication> effects) =>
+            eating.TryGetValue(consumer, out List<EdibleObject> edibles) ? edibles.FirstOrDefault(e => e != null && ReferenceEquals(e.ConsumptionEffects, effects)) : null;
+
         static void StartPrefix(EdibleObject __instance, ConsumptionManager consumer)
         {
             try
@@ -51,11 +54,14 @@ namespace CookingLib
                 Player player = PlayerIds.Of(__instance);
                 Pickup pickup = edible.GetComponent<Pickup>();
                 Item item = pickup == null ? null : pickup.Item;
+                LibEdible changed = Edibles.Find(item);
+                if (changed != null)
+                    changed.Eaten++;
                 Drinks.Eat(new EatArgs(player, PlayerIds.InfoOf(player))
                 {
                     Item = item,
                     Effects = effects.Where(effect => effect != null).Select(effect => effect.Copy()).ToList().AsReadOnly(),
-                    Edible = Edibles.Find(item)
+                    Edible = changed
                 });
             }
             catch (Exception e)

@@ -1,6 +1,6 @@
 # CookingLib
 
-A library for A Township Tale mods. Other mods use it to add liquids, stew recipes and infusions (an item dropped into a liquid turns it into another liquid), to change the game's own recipes, ingredients, garnishes, stews, foods, liquids, cooking pots and what items turn into over a fire, and to hear when players cook, drink and eat. On its own it adds no content, but it keeps stews in pots across restarts.
+A library for A Township Tale mods. Other mods use it to add liquids, effects, stew recipes and infusions (an item dropped into a liquid turns it into another liquid), to make any item a stew ingredient or a food, to change the game's own recipes, ingredients, garnishes, stews, foods, liquids, cooking pots and what items turn into over a fire, and to hear when players cook, drink and eat. On its own it adds no content, but it keeps stews in pots across restarts.
 
 ## Install
 
@@ -8,19 +8,26 @@ Needs MelonLoader. Put `CookingLib.dll` in the `Mods` folder of the server. Play
 
 | A mod adds | Server needs | Players need |
 |---|---|---|
-| Server only liquids, stew recipes, infusions, pot rules, roasting rules, stew stage changes | CookingLib and the mod | nothing, vanilla players can join |
-| Shared liquids | CookingLib and the mod | CookingLib and the mod |
+| Server only liquids and effects, stew recipes, infusions, cookables, pot rules, roasting rules, stew stage changes | CookingLib and the mod | nothing, vanilla players can join |
+| Items made edible | CookingLib and the mod | nothing; with both they also hear the crunch |
+| Shared liquids and shared effects | CookingLib and the mod | CookingLib and the mod |
 | Shared recipes | CookingLib and the mod | nothing while `SharedRecipePages` is off; with it on, CookingLib and the mod |
 | Changes to game recipes, ingredients, garnishes, foods and liquids | CookingLib and the mod | nothing; with both they also see the new journal pages |
 
 ## For modders
 
-Reference `CookingLib.dll` (keep `CookingLib.xml` next to it for tooltips) and register everything from `CookingLib.Main.Setup`:
+Reference `CookingLib.dll` (keep `CookingLib.xml` next to it for tooltips). Register new effects from `CookingLib.Main.PreSetup` and everything else from `CookingLib.Main.Setup`:
 
 ```csharp
 public override void OnInitializeMelon()
 {
+    CookingLib.Main.PreSetup += PreSetup;
     CookingLib.Main.Setup += Setup;
+}
+
+static void PreSetup()
+{
+    Effects.RegisterServerOnly(new CustomEffectSpec { Id = "you.ironskin", Template = "Damage Protection Indirect effect", Seconds = 300 });
 }
 
 static void Setup()
@@ -28,9 +35,8 @@ static void Setup()
     Liquids.RegisterServerOnly(new LiquidSpec
     {
         Id = "you.ashwater",
-        Look = "Water Liquid Visual Data",
-        Color = new Color(0.55f, 0.53f, 0.5f),
-        Effects = { new EffectSpec { Effect = "Heal", Strength = 0.5f } }
+        Shade = "#8C8780",
+        Effects = { new EffectSpec { Effect = "Heal", Strength = 0.5f }, new EffectSpec { Effect = "you.ironskin", Strength = 1f } }
     });
 }
 ```
@@ -54,13 +60,60 @@ Every liquid, stew ingredient and recipe extra lists effects with a strength. Th
 - Speed, Damage, Damage Protection and Luminosity are buffs. Strength sets how strong a buff is, not how long it lasts. Each sip starts a new buff, and buffs on the same stat add up. Vanilla buffs last 15 minutes.
 - `OverSeconds` gives Heal or Nourish out over that many seconds, 1 to 3600, instead of at once. Every other effect refuses it. Each sip or meal runs on its own, so two of them heal side by side. It works on liquids, foods and game liquids, and a server only liquid keeps it across a restart.
 - A stew always applies its effects at once, so recipe extras and modifiers refuse `OverSeconds`, and a stew cooked on such a liquid gives it at once. `status` warns about such a recipe.
+- `Seconds` on a buff sets how long it lasts, 1 to 86400, instead of 900: `new EffectSpec { Effect = "Speed", Strength = 1f, Seconds = 60 }`. CookingLib makes a server only copy of that buff for that length; the same buff and length always give the same copy, so stews add them up. Shared liquids can't use it.
 - Death ends every buff. A running buff survives logging out and restarts.
+
+### New effects
+
+`Effects.RegisterServerOnly(spec)` and `Effects.RegisterShared(number, spec)` add effects that any liquid, stew, ingredient, garnish or food can then name by id. Register them from `Main.PreSetup`: liquids and pages are built at `Setup`.
+
+| Kind | Spec | What it does |
+|---|---|---|
+| Buff | `Template` a game buff such as `Speed`, then `Stat`, `BaseValue`, `Seconds` | adds to a stat for a while, like the game's buffs |
+| Change | `Template` a stat change such as `Heal`, then `Stat` | adds its strength to a stat at once |
+| Teleport | `Template` a teleport such as `TeleportHome`, then `Destination`, `Chance` | sends the player to a spawn area, strength is the chance |
+| Tag | `Template = "Inate"` | does nothing; drink and eat events can look for it |
+| Code | `Handler = hit => ...` alone | runs your code on the server |
+
+- Fields left null keep the template's. `cookinglib dump` lists every effect, stat and curve with its values, and which stats a buff copy can't use.
+- A code effect's handler runs from the next frame, once per sip, bite or splash, with the hits of one frame on one player merged: `Strength` is their sum and `Hits` how many. A handler that throws is logged and the game carries on.
+- Server only effects never reach players: their number is a multiple of 65536, and CookingLib filters them out of every liquid it sends. Vanilla players can join and feel them.
+- A shared effect takes a number from 1 to 65535 that no other mod uses; pick one from 50000 to 59999. Register it on the server and on players' machines with the same spec. Players without it log one error each time a liquid carrying it reaches them, and play on.
+- Saves keep an effect's number forever, in bottles, bowls and pots. The server books every number in `UserData\CookingLib-effects.txt`; when a booked effect's mod is gone, CookingLib stands an empty placeholder in for it, so saved liquids drink as nothing instead of breaking sips. Put the mod back and they work again. Never rename an id.
+- `Glyph` names a game glyph from the dump. A copy keeps its template's glyph; an effect on a journal page needs one.
+- Refused: a buff that scales its length by strength, a buff on a stat that is not plain at no buff, a server only change to fullness (players judge fullness with their own copy; use Feed), and anything registered after `PreSetup`.
+- `cookinglib stats <player>` shows each stat with its buffs and how long each has left.
 
 ### Stew recipes
 
 `StewRecipes.Register(spec)` adds a recipe. It borrows the look and name of a vanilla stew (`Look`, a vanilla recipe or stew prefab name), takes any registered or vanilla liquids as its base, and can change the stew's colour (`Tint`) or swap the finished stew for a liquid (`ResultLiquid`). These recipes never show up on recipe pages; shared recipes (below) can.
 
 Like vanilla stews, extra effects scale with the stew's stage: about 0.3 at Raw, full at Cooked, nothing at Burnt. An `EffectModifiers` entry multiplies the stew's whole total for that effect and is scaled by the stage the same way.
+
+`StageResults` gives a result per stage, over `ResultLiquid`: `StageResults = { { StewStage.Burnt, "you.ash" } }` keeps the stew at Raw and Cooked and turns it into `you.ash` when it burns, and an empty string keeps the stew at that stage. `VanillaRecipes.Modify` takes it too.
+
+### Any item as a stew ingredient
+
+`Cookables.Register(spec)` makes an item that is not a food into a stew ingredient, such as an ore or a wedge. Server only, so vanilla players need nothing; they see it dissolve like a food.
+
+```csharp
+Cookables.Register(new CookableSpec
+{
+    Id = "you.ironore",
+    Item = "Iron Ore",
+    Effects = new List<EffectSpec> { new EffectSpec { Effect = "you.ironskin", Strength = 0.5f } },
+    Chunk = "MushroomBrown Burnt Chunk Visual",
+    SoakSeconds = 2f
+});
+```
+
+- Call it from `Main.Setup`. It takes `Effects`, `Chunk` and `Category` like a game ingredient, and recipe slots can list it by name.
+- The item dissolves once it has rested `SoakSeconds` (0 to 60) in liquid hot enough to stew, nobody holding it. Lifting it out pauses the count; holding it starts it again.
+- It must sit in the middle of the pot, where the game checks for ingredients. A long item such as a wedge, dropped from above, can bounce out or lie across the top and never soak: lower it in.
+- `Materials` takes physical material names from the dump, so only those dissolve, such as oak wedges.
+- A locked pot pushes it out, like a food, unless `PushOutWhenLocked` is false.
+- A pot keeps its cookables across a restart and an area unloading. Drinking the stew unlocks no journal page for the item.
+- Refused: a food or a garnish (use `VanillaIngredients.Modify`), an item with no pickup or networked body at its root, an item that holds others, a crafting part, and anything registered after the world is up. `status` counts what dissolved and was pushed out, and `dump` shows each cookable's prefab.
 
 ### Shared recipes and pages
 
@@ -217,7 +270,7 @@ VanillaStews.Modify(new StewSpec
 
 ### Game foods and liquids
 
-`Edibles.Register(spec)` changes what one of the game's foods gives when eaten, and `VanillaLiquids.Modify(spec)` changes what one of its liquids gives, such as a potion. `Effects` replaces the whole list.
+`Edibles.Register(spec)` changes what one of the game's foods gives when eaten, or makes an item that is not food edible. `VanillaLiquids.Modify(spec)` changes what one of the game's liquids gives, such as a potion. `Effects` replaces the whole list.
 
 ```csharp
 Edibles.Register(new EdibleSpec
@@ -241,13 +294,43 @@ VanillaLiquids.Modify(new VanillaLiquidSpec
 
 - Call both from `Main.Setup` on the server and on players' machines. Vanilla players get the new effects; players with CookingLib and your mod also see the new food pages.
 - Feed stays the game's on foods and game liquids: a Feed entry is refused and the game's Feed is kept. Vanilla players judge how full they are with their own copy of the food or liquid, so a changed Feed would make them and the server disagree. For a more filling food, raise Nourish.
-- Each stage is its own food, so `Babu Leg Full Ripe` and `Babu Leg Full Cooked` change separately. Only the game's own foods can change; anything else is refused. `Bites`, `BiteSeconds` and `LikeFood` are for a later CookingLib.
+- Each stage is its own food, so `Babu Leg Full Ripe` and `Babu Leg Full Cooked` change separately.
 - A food page shows 3 effects and the game's Feed takes one of them. More is refused.
 - An effect the food or liquid already has keeps its own `OverSeconds` unless you set one.
 - A food change made after Setup applies at once, to foods already in the world too, and so does `Edibles.Revert(id)`. Books build their food pages when they load, so a book shows the old page until it reloads.
 - `VanillaLiquids.Modify` applies right after `Main.PostSetup`; later calls are refused. Every bottle, river and stew base of that liquid uses the new effects. Effects only: its colour, look and chunks stay the game's. `VanillaLiquids.Revert(id)` undoes it.
 - Water is refused unless the spec sets `AllowWater`, since it changes every stew and every water sip, and `status` says so. For every stew, `PotRules.GlobalEffects` is usually the better choice.
 - Nothing is saved: without the mod the game's values come back at the next start.
+
+An item that is not food becomes edible the same way, from `Main.Setup`:
+
+```csharp
+Edibles.Register(new EdibleSpec
+{
+    Id = "you.wedgesnack",
+    Item = "Woodcut Wedge",
+    Effects = new List<EffectSpec> { new EffectSpec { Effect = "Feed", Strength = 1f } },
+    Bites = 3,
+    BiteSeconds = 0.6f
+});
+```
+
+- `LikeFood` (an apple unless set) lends its bites, crunch and crumbs; `Bites` (1 to 20) and `BiteSeconds` (0.05 to 10, at most 10 in all) override them. It may carry Feed, and it gets no journal page.
+- Vanilla players can eat it: the server does the eating. Players with CookingLib and your mod also hear the crunch.
+- Refused: an item another mod already made edible, an item with no pickup at its root, and anything registered after `Setup`. A player can't eat it while it is docked, holds other items or holds liquid, and docking it mid bite gives nothing.
+- CookingLib makes its items edible as the game builds its prefab list, before mods that walk that list afterwards, so a mod such as Omnivore leaves those items to CookingLib.
+- `Edibles.CanEat` is asked on the server before anyone starts eating anything, game foods too. Return false to refuse: the item crunches and stays. Keep it quick, it can be asked several times per bite. A handler that throws allows.
+- `Revert` can't undo an item made edible; it stays edible until the server restarts.
+
+### Colours
+
+- `Shade` takes the colour players should see, as `#RRGGBB` or a name such as `teal`. In a bowl or a pot a liquid's surface is its tint times its look, so CookingLib works out the tint for you. With no `Look` it takes Default Stew Raw, a neutral grey, unless the colour is brighter than that look allows; then Glowing Mushroom Stew Raw, Vision Stew Cooked or Water, whichever loses least.
+- The look's depth colour is never tinted and shows through in a deep pot, so a pale look keeps a pale pot. A bottle shows the tint itself, so it reads brighter than the same liquid in a bowl.
+- On a recipe (`StewRecipeSpec`, `VanillaRecipeSpec`) and a dye that `ColorsStews`, `Shade` is worked out for each stage's look, so the stew keeps one colour from Raw to Burnt as far as each look allows. Burnt looks are dark, so a burnt stew stays darker.
+- On a stew stage (`StewSpec`), `Shade` is worked out for that stage's look.
+- No liquid is brighter than its look: a look with no red can't show red, and `status` says which channels a shade lost. Use `Shade` or `Color`/`Tint`, not both.
+- `Colors.Parse`, `Colors.OfLook` and `Colors.OfLiquid` give colours from text, a look's own colour, and what players see for a liquid.
+- `cookinglib color <#RRGGBB or name> [look]` shows a colour on the four looks, or on one, with what each loses. `dump` lists every look's depth, rim and transparency, and every game liquid as players see it.
 
 ### Roasting
 
@@ -383,6 +466,8 @@ A number is tried first, then the game's exact name, then an alias. An alias kee
 ## Uninstalling
 
 - Removing a mod whose liquid is a pot's stew base: while CookingLib runs, that pot carries on with Water as its base.
+- Removing a mod with effects: saved liquids that carry them drink as nothing while CookingLib runs, and work again when the mod is back.
+- Removing a mod with cookables: pots holding them carry on without those ingredients. Removing CookingLib itself breaks the next save of a pot that holds a cookable, so empty those pots first.
 - Removing CookingLib itself leaves a pot holding a server only base with no base, stuck until it is emptied.
 - Removing a mod that changes game recipes, ingredients, foods, liquids, pot rules or roasting gives back the game's values at the next start.
 - Removing a mod with shared recipe pages turns its papers in the world into a Wooden Bag page at the next save, for good. Its pages stay unlocked, and putting the mod back brings back its book entry, not the papers.
@@ -390,6 +475,17 @@ A number is tried first, then the game's exact name, then an alias. An alias kee
 ## Building
 
 Run `dotnet build`. The game path defaults to `C:\Games\Alta\A Township Tale`, pass `-p:GamePath="your path"` to use another one. `python tools/check_style.py` checks the code style, and `dotnet run --project tests/CookingLib.Tests` runs the offline tests (the game must be installed, not running). The tests are not part of the release.
+
+## Changes in 0.3
+
+- New `Effects.RegisterServerOnly` and `RegisterShared`: copies of the game's buffs, stat changes, teleports and markers with their own stat, strength, length or destination, and code effects that run your handler on the server. Liquids, stews, ingredients, garnishes and foods name them by id. Server only effects never reach players.
+- Saves keep effect numbers: the server books them in `UserData\CookingLib-effects.txt` and stands an empty placeholder in for any whose mod is gone.
+- New `EffectSpec.Seconds` sets how long a buff lasts.
+- New `Cookables.Register` makes an item that is not food into a stew ingredient, and recipe slots can list it. Pots keep it across restarts.
+- `Edibles.Register` also makes an item that is not food edible, with bites borrowed from a game food. New `Edibles.CanEat` refuses any meal. A Feed entry on a game food is now refused when the world loads instead of at Register.
+- New `StageResults` on recipes gives a result liquid per stage, or keeps the stew at a stage.
+- New `Shade` takes the colour players should see on liquids, recipes, dyes and stew stages. New `Colors.Parse`, `OfLook` and `OfLiquid`.
+- New console commands `cookinglib stats <player>` and `cookinglib color`. `status` and `dump` show effects, cookables, eating guards, looks and stats.
 
 ## Changes in 0.2.1
 
@@ -421,81 +517,35 @@ Run `dotnet build`. The game path defaults to `C:\Games\Alta\A Township Tale`, p
 
 ## Known issues
 
-- 0.2 has not run on a live server yet. Everything new is built from the game's own code, so please test and report.
+- 0.2.1 and 0.3 ran on a local server with a flatscreen client. Two players at once, a headset's feel, and Quest players are not tested yet.
+- A long item such as a wedge, dropped into a pot from above, can lie across the top and never soak. Lower it in.
+- A refused meal (`Edibles.CanEat`, or an item made edible that is docked or holds something) still crunches on the player's own machine; the item stays.
+- A shared effect logs one error each time a liquid carrying it reaches a player without your mod.
 - If a stewing pot shows as skipped under `pot reloads` in `status`, it stays vanilla and loses its stew as before.
 - Items resting in a locked pot after a reload just sit there, as in the game.
-- `Drinks.Ate` and the stew events use Harmony features not yet tried on a live server. If one fails, `status` shows it off and the rest keeps working.
-- How much a pour, a sip and a dunk give (`Units`) and the mouth size are untested.
+- Roasting at a rule's speed was only seen at forge heat, which burns food at once. Tell us what a campfire does.
 - With a raised pot ingredient count, the first stew may cook before the last ingredient goes in.
 - Vanilla players hear the boiling sound start at 80 whatever `StewingTemperature` says.
-- Untested whether every item already in the world picks up a roasting rule at boot.
 - A vanilla player who comes across a shared recipe page sees a blank sheet and gets errors in their log.
 - `cookinglib unlock` can reply `unlock failed` while the world's pages are not loaded yet. Try again a little later.
 - The replies of `cookinglib foods` and `cookinglib pots` can be long for some console tools. The TSV and dump files hold everything.
 - Books show an old food, ingredient, garnish or recipe page until they reload, and a page reverted while the server runs can show twice.
 - A stew locked and cooked before a stew stage change keeps its liquid until its next ingredient, garnish or stage change.
-- What an ingredient dropped into a locked pot does at `RejectionForce` 0, and whether a vanilla client sees a changed push, are untested.
+- Runtime switches of the example (`cookingprobes`) start off after a restart, so a stew a switch coloured comes back in its own colour.
 
 ## Please test and report
 
-0.2 has only been checked against the game's code. Run the example mod (`Examples/CookingLibExample`) and tell us what you see, with the log lines it prints.
+Run the example mod (`Examples/CookingLibExample`) and tell us what you see, with the log lines it prints. These are the parts a flatscreen test can't settle:
 
-**Pots after a restart**
-
-- Cook a recipe stew, leave it at Raw, `save now`, restart: the same colour and effects, it cooks on to Cooked, and `status` shows it under `pot reloads` as resumed with a recipe.
-- Put 2 ingredients in a pot, walk away until the area unloads, come back and add 2 more: the recipe matches.
-- After a reload, walk up to a locked pot and drop an ingredient in: the stew shows once and the ingredient is pushed out.
-
-**Dyes**
-
-- Drop Coal into a pot of water with no ingredients, then cook a stew in it to Burnt: black at every stage, while a plain Water stew looks normal.
-- With DyeingAPI v7 on the server, dip an item it can dye into a black stew: tell us which colour it takes.
-
-**Drinking and eating**
-
-- Pour Water into your mouth, sip from a cup, and dunk a bowl in a river: send the `drank:` lines.
-- Finish a food, and leave another after one bite: one `ate:` line, none for the one you left.
-- `cookingprobes on nowater`: a pour of Water spills and a cup at the lips stays full, on a vanilla client too.
-- With HydrateOrDiedrate on the same server, thirst still works.
-
-**Stew events**
-
-- Two players add ingredients to one Berry Stew: send the `stew made` and `stew stage changed` lines.
-- One ingredient alone in a hot pot: it cooks, locks the pot (`Unfinished`), and the next item is pushed out.
-
-**Pot rules**
-
-- `cookingprobes on rules`: a 3 ingredient stew locks and a second garnish floats. `cookingprobes off rules` gives vanilla pots back.
-- `cookingprobes on big`: does the first stew cook before the 8th ingredient goes in?
-
-**Game recipes, foods and liquids**
-
-- On a vanilla client, cook Berry Stew: green, with Speed. A modded client also sees the new journal page.
-- Eat Babu Leg Full Cooked on a vanilla client: it heals over 10 seconds, with no server error.
-- Drink a Health Potion bottled before the server started: it gives the example's Heal 3.
-
-**Roasting**
-
-- Hold Garlic Full Ripe over a campfire: it turns into a Pickaxe Head at about four times the usual speed, with a `roasted:` line. Tell us which metal it is.
-- Warm a rule item partway, `save now`, restart: it carries on at the rule's speed. Send the `roasting: applied to N live items` boot line.
-
-**Shared recipe pages**
-
+- Two players add ingredients to one stew, an `example.orestew` with Iron Ore say: send the `stew made` line, its cooks and `AddedBy`.
+- A player without CookingLib stands near one who drinks a liquid with `example.chime`: what their log says, and that they stay connected.
+- A Quest player on the server: drink `example.emberwater`, eat a Woodcut Wedge, drop Iron Ore into a boiling pot.
+- With a modded client, eat a Woodcut Wedge: the crunch and crumbs on each bite.
+- Hold Garlic Full Ripe over a lit campfire: it turns into a Pickaxe Head at about four times the usual speed.
 - Set `SharedRecipePages = true`, restart, run `cookinglib unlock example.hearthstew` and open a Stewing Recipes book on a modded client: the hearth stew page is last and draws its glyphs.
-- Tell us what a vanilla player sees on that page, and that they stay connected.
-
-**Food values**
-
-- `cookinglib foods all` on a fresh boot: send the reply, how long it took, and whether the whole reply reached your console tool.
-
-**Garnishes and stew stages**
-
-- `cookinglib foods stages` and `cookinglib dump` on any server: send the stages part and the Stews section, with the multipliers, tints and xp flags of all 54 stews.
-- Cook 4 cooked eggplant halves with 1 Salt, then run `cookinglib foods mix Cooked` with the same four and `+ Salt`: Protection is doubled by the example's Salt change, and the `drank:` line agrees.
-- Spawn Garlic Full Cooked's ingredient page: a modded client reads Nourish 0.5, a vanilla client the game's 0.1, and a stew with that garnish gives 0.5 to both.
-- Lock a pot on the non recipe stew with 4 unmatched ingredients, `cookingprobes on stew`, then drop Salt in: the stew turns green and `cookinglib pots` shows its effects at x1.5. `save now` and restart: still green, and `status` counts the pot's stews under reloading pots.
-- `cookingprobes on norecipe`, then 4 unmatched ingredients: the pot locks on a pumpkin looking stew with no pumpkin buffs, on a vanilla client too. Restart: the pot resumes locked with no recipe.
-- `cookingprobes on push0`, drop a carrot into a locked pot: it rests in the pot. `cookingprobes off push0`, `cookingprobes on push1000`, drop another: it flies. Tell us what a vanilla client sees both times.
+- With DyeingAPI v7 on the server, dip an item into a stew coloured by `example.tealdye`: tell us which colour it takes.
+- With HydrateOrDiedrate on the same server, thirst still works.
+- How the colours look in a headset: a Health Potion in a bottle against a bowl, and `example.tealdye` in a pot.
 
 ## Reporting problems
 

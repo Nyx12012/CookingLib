@@ -24,8 +24,11 @@ namespace CookingLib
         /// <summary>True once the food gives the new effects.</summary>
         public bool IsReady { get; internal set; }
 
-        /// <summary>True when it changes one of the game's own foods. Always true in CookingLib 0.2.</summary>
-        public bool IsVanillaFood => true;
+        /// <summary>True when it changes one of the game's own foods, false for an item it made edible. Known once IsReady.</summary>
+        public bool IsVanillaFood { get; internal set; } = true;
+
+        /// <summary>How many times players finished eating it since the server started.</summary>
+        public int Eaten { get; internal set; }
 
         /// <summary>The food's item.</summary>
         public Item Item { get; internal set; }

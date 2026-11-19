@@ -21,6 +21,7 @@ namespace CookingLibExample
         };
 
         static MelonPreferences_Entry<bool> water;
+        static MelonPreferences_Entry<bool> effects;
         static MelonPreferences_Entry<bool> roast;
         static MelonPreferences_Entry<string> roastInto;
 
@@ -54,10 +55,24 @@ namespace CookingLibExample
                 return null;
             }, () => Drinks.CanDrink -= RefuseWater),
             new Switch("water", "the game's Water gives Reveal 1 and Heal 0.1, read at boot, so restart the server after on or off", () => SaveWater(true), () => SaveWater(false)),
-            new Switch("roast", "Garlic Half Cooked burns into the RoastPartsInto prefab, Pouch unless MelonPreferences.cfg names another, read at boot, so restart the server after on or off", () => SaveRoast(true), () => SaveRoast(false))
+            new Switch("roast", "Garlic Half Cooked burns into the RoastPartsInto prefab, Pouch unless MelonPreferences.cfg names another, read at boot, so restart the server after on or off", () => SaveRoast(true), () => SaveRoast(false)),
+            new Switch("noapple", "nobody can start eating Apple Full Ripe", () =>
+            {
+                Edibles.CanEat += RefuseApple;
+                return null;
+            }, () => Edibles.CanEat -= RefuseApple)
         };
 
+        static MelonPreferences_Entry<string> wedgeMaterial;
+
+        internal static List<string> WedgeMaterials() =>
+            wedgeMaterial == null || string.IsNullOrEmpty(wedgeMaterial.Value) ? null : new List<string> { wedgeMaterial.Value };
+
+        static bool RefuseApple(EatCheck check) => !(check.Item != null && check.Item.name == "Apple Full Ripe");
+
         internal static bool WaterAtBoot => water != null && water.Value;
+
+        internal static bool EffectsAtBoot => effects == null || effects.Value;
 
         internal static bool RoastAtBoot => roast != null && roast.Value;
 
@@ -73,8 +88,10 @@ namespace CookingLibExample
         {
             MelonPreferences_Category category = MelonPreferences.CreateCategory("CookingLibExample");
             water = category.CreateEntry("WaterEdit", false, "Water edit probe, read at boot");
+            effects = category.CreateEntry("Effects", true, "Registers example.ember, example.zap, example.chime and example.emberwater, read at boot. Off shows the effect placeholders");
             roast = category.CreateEntry("RoastParts", false, "Roast probe: Garlic Half Cooked burns into RoastPartsInto, read at boot");
             roastInto = category.CreateEntry("RoastPartsInto", "Pouch", "A prefab from the dump's roast results with parts");
+            wedgeMaterial = category.CreateEntry("WedgeMaterial", "", "A physical material from the dump: only wedges of it stew. Empty takes any, read at boot");
             Find("water").IsOn = water.Value;
             Find("roast").IsOn = roast.Value;
         }

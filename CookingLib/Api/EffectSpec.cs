@@ -11,5 +11,8 @@ namespace CookingLib
 
         /// <summary>Gives Heal or Nourish out over this many whole seconds, 1 to 3600, instead of at once. 0 gives it at once. Refused in stew recipes, since a stew always gives its effects at once.</summary>
         public int OverSeconds;
+
+        /// <summary>How long a buff such as Speed lasts, 1 to 86400 seconds, instead of the game's 900. 0 keeps the effect's own. The same effect and length always give the same effect, so stews add them up. Not on shared liquids.</summary>
+        public int Seconds;
     }
 }

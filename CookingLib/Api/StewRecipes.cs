@@ -254,6 +254,12 @@ namespace CookingLib
             EffectSpread.Refuse(spec.EffectModifiers, "EffectModifiers");
             if (spec.Tint.HasValue && !LiquidFactory.IsValidColor(spec.Tint.Value))
                 throw new ArgumentException("tint channels must be 0 to 1");
+            if (!string.IsNullOrEmpty(spec.Shade))
+            {
+                if (spec.Tint.HasValue)
+                    throw new ArgumentException("set Shade or Tint, not both");
+                Shades.Need(spec.Shade, "Shade");
+            }
         }
     }
 }

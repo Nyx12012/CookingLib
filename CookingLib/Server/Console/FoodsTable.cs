@@ -236,8 +236,9 @@ namespace CookingLib
                 StringBuilder reply = new StringBuilder(recipe != null ? recipe.name : "Non recipe stew").Append(", ").Append(stage)
                     .Append(" (").Append(entry.Name).Append("), on Water: ");
                 reply.Append(effects.Count == 0 ? "no effects" : string.Join(", ", effects.Select(e => EffectName(e.EffectToModify) + " " + Number(e.StrengthMultiplier)).ToArray()));
-                if (StewContentPatch.ResultOf(recipe) != null)
-                    reply.Append(". In a pot its ResultLiquid replaces this");
+                StageResults results = StewContentPatch.ResultsOf(recipe);
+                if (results != null && results.For(entry.Stew) != null)
+                    reply.Append(". In a pot its result liquid replaces this");
                 return reply.ToString();
             }
             catch (ArgumentException e)

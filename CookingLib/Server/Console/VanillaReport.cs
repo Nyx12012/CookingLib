@@ -46,13 +46,16 @@ namespace CookingLib
 
             List<LibEdible> foods = Edibles.All.ToList();
             text.Append("edibles: ").Append(foods.Count(e => e.Error == null && e.IsReady)).Append(" ready (")
-                .Append(foods.Where(e => e.Error == null && e.IsReady).Select(e => e.PrefabHash).Distinct().Count()).Append(" foods changed), ")
+                .Append(foods.Where(e => e.Error == null && e.IsReady && e.IsVanillaFood).Select(e => e.PrefabHash).Distinct().Count()).Append(" foods changed, ")
+                .Append(Edibles.Injected).Append(" made edible), ")
                 .Append(foods.Count(e => e.Error != null)).Append(" refused, swept ").Append(Edibles.Swept)
                 .Append(Main.IsServer && !ServerPatches.PrefabMapOn ? ", the prefab map patch failed to apply so foods change after Setup" : "").Append('\n');
+            text.Append("eating: ").Append(Edibles.Error ?? (ServerPatches.EdiblesOn ? "guards on" : "guards off on players' machines")).Append("; refused at start ").Append(Edibles.RefusedAtStart)
+                .Append(", by CanEat ").Append(Edibles.RefusedByCanEat).Append(" (").Append(Edibles.CanEatHandlers).Append(" handlers), skipped at end ").Append(Edibles.SkippedAtEnd).Append('\n');
             foreach (LibEdible entry in foods)
             {
                 string target = entry.Item != null ? entry.Item.name : entry.Spec?.Item;
-                string state = entry.Error != null ? "refused: " + entry.Error : entry.IsReady ? "ready, " + VanillaEdits.Text(entry.Effects) : "waiting for the prefabs";
+                string state = entry.Error != null ? "refused: " + entry.Error : entry.IsReady ? (entry.IsVanillaFood ? "ready, " : "made edible, ") + VanillaEdits.Text(entry.Effects) + ", eaten " + entry.Eaten : "waiting for the prefabs";
                 text.Append("  ").Append(entry.Id).Append("  ").Append(target).Append(": ").Append(state).Append(Notes(entry.Warnings))
                     .Append(CookingLibCommands.AliasNotes(entry.Spec?.Effects)).Append('\n');
             }
@@ -81,7 +84,7 @@ namespace CookingLib
                 if (edit != null && edit.IgnoresDyes)
                     text.Append("  ignores dyes");
                 if (edit != null && edit.Result != null)
-                    text.Append("  result ").Append(edit.Result.Lib != null ? edit.Result.Lib.Id : edit.Result.Vanilla.name);
+                    text.Append("  result ").Append(edit.Result.Text());
                 if (VanillaRecipes.IsDisabled(recipe))
                     text.Append("  disabled");
                 text.Append(ChangedBy(recipe)).Append('\n');

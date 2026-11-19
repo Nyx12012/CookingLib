@@ -27,6 +27,10 @@ namespace CookingLib
 
         internal static bool RoastOn { get; private set; }
 
+        internal static bool CookablesOn { get; private set; }
+
+        internal static bool EdiblesOn { get; private set; }
+
         internal static void Apply(HarmonyLib.Harmony harmony)
         {
             PagesGuarded = Run(PageGuardPatch.Apply, harmony);
@@ -42,6 +46,12 @@ namespace CookingLib
             PotReloadOn = Run(PotReloadPatch.Apply, harmony);
             PrefabMapOn = Run(PrefabMapPatch.Apply, harmony);
             RoastOn = Run(RoastPatch.Apply, harmony);
+            CookablesOn = Run(CookablePatches.Apply, harmony);
+            EdiblesOn = Run(EdiblePatches.Apply, harmony);
+            if (!EdiblesOn)
+                Edibles.Error = "the eating guard patches failed to apply, so no item is made edible";
+            if (!CookablesOn)
+                Cookables.Error = "the cookable patches failed to apply";
         }
 
         static bool Run(Action<HarmonyLib.Harmony> apply, HarmonyLib.Harmony harmony)

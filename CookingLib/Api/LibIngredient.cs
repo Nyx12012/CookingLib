@@ -25,8 +25,23 @@ namespace CookingLib
         /// <summary>True once its changes are in the game: Effects at Setup on both sides, Chunk and Category on the server once the world is up.</summary>
         public bool IsApplied { get; internal set; }
 
-        /// <summary>The game's stew ingredient it changes.</summary>
+        /// <summary>The game's stew ingredient it changes, or for a cookable the one CookingLib made for the item.</summary>
         public CookableItem Cookable { get; internal set; }
+
+        /// <summary>True for an item Cookables.Register made into a stew ingredient. Server only.</summary>
+        public bool IsCookable { get; internal set; }
+
+        /// <summary>How many of this cookable dissolved into stews since the server started.</summary>
+        public int Converted { get; internal set; }
+
+        /// <summary>Things worth knowing, such as an item that also infuses liquids.</summary>
+        public IReadOnlyList<string> Warnings => Notes;
+
+        internal List<string> Notes { get; } = new List<string>();
+
+        internal int PushedOut { get; set; }
+
+        internal List<PhysicalMaterial> Materials { get; set; }
 
         /// <summary>Recipes a Category change touches, with (drop order decides) on those where the order ingredients go in picks the recipe. Empty until the server applies it.</summary>
         public IReadOnlyList<string> TouchedRecipes => Touched;

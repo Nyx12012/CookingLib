@@ -35,6 +35,8 @@ namespace CookingLib
 
         internal bool PageBuilt { get; set; }
 
-        internal LiquidRef Result { get; set; }
+        internal StageResults Result { get; set; }
+
+        internal UnityEngine.Color? Shade { get; set; }
     }
 }

@@ -133,8 +133,14 @@ namespace CookingLib
                 throw new ArgumentException("id is already used, Revert it first");
             if (string.IsNullOrEmpty(spec.Stew))
                 throw new ArgumentException("Stew is empty");
-            if (!spec.Ingredients.HasValue && !spec.BaseLiquid.HasValue && !spec.Extras.HasValue && !spec.Tint.HasValue)
-                throw new ArgumentException("set at least one of Ingredients, BaseLiquid, Extras, Tint");
+            if (!spec.Ingredients.HasValue && !spec.BaseLiquid.HasValue && !spec.Extras.HasValue && !spec.Tint.HasValue && string.IsNullOrEmpty(spec.Shade))
+                throw new ArgumentException("set at least one of Ingredients, BaseLiquid, Extras, Tint, Shade");
+            if (!string.IsNullOrEmpty(spec.Shade))
+            {
+                if (spec.Tint.HasValue)
+                    throw new ArgumentException("set Shade or Tint, not both");
+                Shades.Need(spec.Shade, "Shade");
+            }
             if (spec.Ingredients.HasValue && !VanillaEdits.IsMultiplier(spec.Ingredients.Value))
                 throw new ArgumentException("Ingredients must be 0 to 10");
             if (spec.BaseLiquid.HasValue && !VanillaEdits.IsMultiplier(spec.BaseLiquid.Value))
@@ -179,10 +185,11 @@ namespace CookingLib
                     VanillaEdits.Write(Key(stage, "extras"), stew, "x" + Claims.Number(stew.ExtraEffectsMultiplier), VanillaEdits.StewExtras, spec.Extras.Value);
                     done.Add("extras x" + Claims.Number(spec.Extras.Value));
                 }
-                if (spec.Tint.HasValue)
+                Color? tint = spec.Tint ?? (string.IsNullOrEmpty(spec.Shade) ? (Color?)null : Shades.OnStage(Shades.Need(spec.Shade, "Shade"), stew));
+                if (tint.HasValue)
                 {
-                    VanillaEdits.Write(Key(stage, "tint"), stew, Rgba(stew.TintColor), VanillaEdits.StewTint, spec.Tint.Value);
-                    done.Add("tint " + Rgba(spec.Tint.Value));
+                    VanillaEdits.Write(Key(stage, "tint"), stew, Rgba(stew.TintColor), VanillaEdits.StewTint, tint.Value);
+                    done.Add("tint " + Rgba(tint.Value) + (spec.Tint.HasValue ? "" : " for shade " + spec.Shade.Trim()));
                 }
 
                 entry.Notes.Clear();
@@ -236,6 +243,8 @@ namespace CookingLib
                 yield return Claims.Stew(stage.Hash, stage.Name, "extras", Claims.Number(spec.Extras.Value));
             if (spec.Tint.HasValue)
                 yield return Claims.Stew(stage.Hash, stage.Name, "tint", Rgba(spec.Tint.Value));
+            else if (!string.IsNullOrEmpty(spec.Shade))
+                yield return Claims.Stew(stage.Hash, stage.Name, "tint", "shade " + spec.Shade.Trim());
         }
 
         static void Sweep(IEnumerable<uint> hashes)
